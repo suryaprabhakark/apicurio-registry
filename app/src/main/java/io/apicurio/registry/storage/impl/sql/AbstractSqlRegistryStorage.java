@@ -1242,7 +1242,7 @@ public abstract class AbstractSqlRegistryStorage implements RegistryStorage {
                     "SELECT a.*, v.globalId, v.version, v.state, v.name, v.description, v.labels, v.properties, "
                             + "v.createdBy AS modifiedBy, v.createdOn AS modifiedOn "
                             + "FROM artifacts a "
-                            + "JOIN versions v ON a.tenantId = v.tenantId AND a.latest = v.globalId ");
+                            + "JOIN versions v ON a.tenantId = v.tenantId AND a.groupid = v.groupid AND a.artifactid = v.artifactid ");
             if (joinContentTable) {
                 select.append("JOIN content c ON v.contentId = c.contentId AND v.tenantId = c.tenantId ");
             }
@@ -1387,7 +1387,7 @@ public abstract class AbstractSqlRegistryStorage implements RegistryStorage {
             // Query for the total row count
             String countSelect = "SELECT count(a.artifactId) "
                     + "FROM artifacts a "
-                    + "JOIN versions v ON a.tenantId = v.tenantId AND a.latest = v.globalId ";
+                    + "JOIN versions v ON a.tenantId = v.tenantId AND a.groupid = v.groupid AND a.artifactid = v.artifactid ";
             if (joinContentTable) {
                 countSelect += "JOIN content c ON v.contentId = c.contentId AND v.tenantId = c.tenantId ";
             }
