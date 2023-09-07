@@ -20,7 +20,6 @@ import io.apicurio.registry.utils.tests.ApicurioTestTags;
 import io.apicurio.tenantmanager.api.datamodel.ApicurioTenant;
 import io.apicurio.tenantmanager.api.datamodel.TenantStatusValue;
 import io.apicurio.registry.AbstractRegistryTestBase;
-import io.apicurio.registry.AbstractResourceTestBase;
 import io.apicurio.registry.rest.client.AdminClient;
 import io.apicurio.registry.rest.client.AdminClientFactory;
 import io.apicurio.registry.rest.client.RegistryClient;
@@ -58,10 +57,8 @@ import java.io.ByteArrayInputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
-import javax.inject.Inject;
+import jakarta.inject.Inject;
 
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -103,7 +100,7 @@ public class MultitenancyNoAuthTest extends AbstractRegistryTestBase {
         AdminClient clientTenant1 = AdminClientFactory.create(tenant1BaseUrl);
         AdminClient clientTenant2 = AdminClientFactory.create(tenant2BaseUrl);
 
-        // NOTE: io.apicurio.registry.mt.TenantNotFoundException is also mapped to HTTP code 403 to avoid scanning attacks
+        // NOTE: io.apicurio.common.apps.multitenancy.TenantNotFoundException is also mapped to HTTP code 403 to avoid scanning attacks
         Assertions.assertThrows(ForbiddenException.class, () -> {
             clientTenant1.listGlobalRules();
         });
@@ -186,27 +183,6 @@ public class MultitenancyNoAuthTest extends AbstractRegistryTestBase {
         // Reset the client cache so that the next line actually does what we want.
         cclient.reset();
         TestUtils.retry(() -> cclient.getSchemaById(id1));
-
-        //test ibm api
-
-        String schemaDefinition = resourceToString("avro.json")
-            .replaceAll("\"", "\\\\\"")
-            .replaceAll("\n", "\\\\n");
-
-        String schemaName = "testVerifySchema_userInfo";
-        String versionName = "testversion_1.0.0";
-
-        // Verify Avro artifact via ibmcompat API
-        given()
-            .baseUri(baseUrl)
-            .when()
-                .queryParam("verify", "true")
-                .contentType(AbstractResourceTestBase.CT_JSON)
-                .body("{\"name\":\"" + schemaName + "\",\"version\":\"" + versionName + "\",\"definition\":\"" + schemaDefinition + "\"}")
-                .post("/apis/ibmcompat/v1/schemas")
-            .then()
-                .statusCode(200)
-                .body(equalTo("\"" + schemaDefinition + "\""));
     }
 
     private void cleanTenantArtifacts(RegistryClient client) throws Exception {

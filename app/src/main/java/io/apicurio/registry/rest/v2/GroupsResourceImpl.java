@@ -29,49 +29,15 @@ import io.apicurio.registry.rest.HeadersHack;
 import io.apicurio.registry.rest.MissingRequiredParameterException;
 import io.apicurio.registry.rest.ParametersConflictException;
 import io.apicurio.registry.rest.RestConfig;
-import io.apicurio.registry.rest.v2.beans.ArtifactContent;
-import io.apicurio.registry.rest.v2.beans.ArtifactMetaData;
-import io.apicurio.registry.rest.v2.beans.ArtifactOwner;
-import io.apicurio.registry.rest.v2.beans.ArtifactReference;
-import io.apicurio.registry.rest.v2.beans.ArtifactSearchResults;
-import io.apicurio.registry.rest.v2.beans.CreateGroupMetaData;
-import io.apicurio.registry.rest.v2.beans.EditableMetaData;
-import io.apicurio.registry.rest.v2.beans.GroupMetaData;
-import io.apicurio.registry.rest.v2.beans.GroupSearchResults;
-import io.apicurio.registry.rest.v2.beans.IfExists;
-import io.apicurio.registry.rest.v2.beans.Rule;
-import io.apicurio.registry.rest.v2.beans.SortBy;
-import io.apicurio.registry.rest.v2.beans.SortOrder;
-import io.apicurio.registry.rest.v2.beans.UpdateState;
-import io.apicurio.registry.rest.v2.beans.VersionMetaData;
-import io.apicurio.registry.rest.v2.beans.VersionSearchResults;
+import io.apicurio.registry.rest.v2.beans.*;
 import io.apicurio.registry.rest.v2.shared.CommonResourceOperations;
 import io.apicurio.registry.rules.RuleApplicationType;
 import io.apicurio.registry.rules.RulesService;
-import io.apicurio.registry.storage.ArtifactAlreadyExistsException;
-import io.apicurio.registry.storage.ArtifactNotFoundException;
-import io.apicurio.registry.storage.InvalidArtifactIdException;
-import io.apicurio.registry.storage.InvalidGroupIdException;
-import io.apicurio.registry.storage.RegistryStorage;
-import io.apicurio.registry.storage.VersionNotFoundException;
-import io.apicurio.registry.storage.dto.ArtifactMetaDataDto;
-import io.apicurio.registry.storage.dto.ArtifactOwnerDto;
-import io.apicurio.registry.storage.dto.ArtifactReferenceDto;
-import io.apicurio.registry.storage.dto.ArtifactSearchResultsDto;
-import io.apicurio.registry.storage.dto.ArtifactVersionMetaDataDto;
-import io.apicurio.registry.storage.dto.EditableArtifactMetaDataDto;
-import io.apicurio.registry.storage.dto.GroupMetaDataDto;
-import io.apicurio.registry.storage.dto.GroupSearchResultsDto;
-import io.apicurio.registry.storage.dto.OrderBy;
-import io.apicurio.registry.storage.dto.OrderDirection;
-import io.apicurio.registry.storage.dto.RuleConfigurationDto;
-import io.apicurio.registry.storage.dto.SearchFilter;
-import io.apicurio.registry.storage.dto.StoredArtifactDto;
-import io.apicurio.registry.storage.dto.VersionSearchResultsDto;
+import io.apicurio.registry.storage.*;
+import io.apicurio.registry.storage.dto.*;
 import io.apicurio.registry.types.ArtifactState;
-import io.apicurio.registry.types.Current;
+import io.apicurio.registry.types.ReferenceType;
 import io.apicurio.registry.types.RuleType;
-import io.apicurio.registry.types.provider.ArtifactTypeUtilProviderFactory;
 import io.apicurio.registry.util.ArtifactIdGenerator;
 import io.apicurio.registry.util.ArtifactTypeUtil;
 import io.apicurio.registry.util.ContentTypeUtil;
@@ -79,10 +45,20 @@ import io.apicurio.registry.utils.ArtifactIdValidator;
 import io.apicurio.registry.utils.IoUtil;
 import io.apicurio.registry.utils.JAXRSClientUtil;
 import io.quarkus.security.identity.SecurityIdentity;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.interceptor.Interceptors;
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.client.Client;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 import org.jose4j.base64url.Base64;
 
+import jakarta.ws.rs.HttpMethod;
+import jakarta.ws.rs.NotAllowedException;
 import java.io.BufferedInputStream;
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -90,25 +66,9 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import javax.enterprise.context.ApplicationScoped;
-import javax.inject.Inject;
-import javax.interceptor.Interceptors;
-import javax.servlet.http.HttpServletRequest;
-import javax.ws.rs.BadRequestException;
-import javax.ws.rs.HttpMethod;
-import javax.ws.rs.NotAllowedException;
-import javax.ws.rs.client.Client;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 
 import static io.apicurio.common.apps.logging.audit.AuditingConstants.*;
 import static io.apicurio.registry.logging.audit.AuditingConstants.KEY_OWNER;
@@ -122,26 +82,17 @@ import static io.apicurio.registry.rest.v2.V2ApiUtil.defaultGroupIdToNull;
 @ApplicationScoped
 @Interceptors({ResponseErrorLivenessCheck.class, ResponseTimeoutReadinessCheck.class})
 @Logged
-public class GroupsResourceImpl implements GroupsResource {
+public class GroupsResourceImpl extends AbstractResourceImpl implements GroupsResource {
 
     private static final String EMPTY_CONTENT_ERROR_MESSAGE = "Empty content is not allowed.";
+    @SuppressWarnings("unused")
     private static final Integer GET_GROUPS_LIMIT = 1000;
-
-    @Inject
-    @Current
-    RegistryStorage storage;
 
     @Inject
     RulesService rulesService;
 
     @Inject
     ArtifactIdGenerator idGenerator;
-
-    @Inject
-    ArtifactTypeUtilProviderFactory factory;
-
-    @Context
-    HttpServletRequest request;
 
     @Inject
     RestConfig restConfig;
@@ -153,16 +104,16 @@ public class GroupsResourceImpl implements GroupsResource {
     CommonResourceOperations common;
 
     /**
-     * @see io.apicurio.registry.rest.v2.GroupsResource#getLatestArtifact(java.lang.String, java.lang.String, java.lang.Boolean)
+     * @see io.apicurio.registry.rest.v2.GroupsResource#getLatestArtifact(java.lang.String, java.lang.String, io.apicurio.registry.rest.v2.beans.HandleReferencesType)
      */
     @Override
     @Authorized(style = AuthorizedStyle.GroupAndArtifact, level = AuthorizedLevel.Read)
-    public Response getLatestArtifact(String groupId, String artifactId, Boolean dereference) {
+    public Response getLatestArtifact(String groupId, String artifactId, HandleReferencesType references) {
         requireParameter("groupId", groupId);
         requireParameter("artifactId", artifactId);
 
-        if (dereference == null) {
-            dereference = Boolean.FALSE;
+        if (references == null) {
+            references = HandleReferencesType.PRESERVE;
         }
 
         ArtifactMetaDataDto metaData = storage.getArtifactMetaData(defaultGroupIdToNull(groupId), artifactId);
@@ -174,13 +125,8 @@ public class GroupsResourceImpl implements GroupsResource {
         MediaType contentType = factory.getArtifactMediaType(metaData.getType());
 
         ContentHandle contentToReturn = artifact.getContent();
-
-        //TODO:carnalca when dereferencing is implemented, we should return the content dereferenced here
-        /*
-        if (dereference && !artifact.getReferences().isEmpty()) {
-            contentToReturn = factory.getArtifactTypeProvider(metaData.getType()).getContentDereferencer().dereference(artifact.getContent(), storage.resolveReferences(artifact.getReferences()));
-        }
-        */
+        contentToReturn = handleContentReferences(references, metaData.getType(), contentToReturn, artifact.getReferences());  
+        
         Response.ResponseBuilder builder = Response.ok(contentToReturn, contentType);
         checkIfDeprecated(metaData::getState, groupId, artifactId, metaData.getVersion(), builder);
         return builder.build();
@@ -212,16 +158,17 @@ public class GroupsResourceImpl implements GroupsResource {
     }
 
     /**
-     * @see io.apicurio.registry.rest.v2.GroupsResource#getArtifactVersionReferences(String, String, String)
-     **/
+     * @see io.apicurio.registry.rest.v2.GroupsResource#getArtifactVersionReferences(java.lang.String, java.lang.String, java.lang.String, io.apicurio.registry.types.ReferenceType)
+     */
     @Override
-    public List<ArtifactReference> getArtifactVersionReferences(String groupId, String artifactId, String version) {
-        if (null == version) {
-            return storage.getArtifact(defaultGroupIdToNull(groupId), artifactId).getReferences().stream()
+    public List<ArtifactReference> getArtifactVersionReferences(String groupId, String artifactId,
+            String version, ReferenceType refType) {
+        if (refType == null || refType == ReferenceType.OUTBOUND) {
+            return storage.getArtifactVersion(defaultGroupIdToNull(groupId), artifactId, version).getReferences().stream()
                     .map(V2ApiUtil::referenceDtoToReference)
                     .collect(Collectors.toList());
         } else {
-            return storage.getArtifactVersion(defaultGroupIdToNull(groupId), artifactId, version).getReferences().stream()
+            return storage.getInboundArtifactReferences(defaultGroupIdToNull(groupId), artifactId, version).stream()
                     .map(V2ApiUtil::referenceDtoToReference)
                     .collect(Collectors.toList());
         }
@@ -311,6 +258,11 @@ public class GroupsResourceImpl implements GroupsResource {
     public void updateArtifactOwner(String groupId, String artifactId, ArtifactOwner data) {
         requireParameter("groupId", groupId);
         requireParameter("artifactId", artifactId);
+        requireParameter("data", data);
+
+        if (data.getOwner().isEmpty()) {
+            throw new MissingRequiredParameterException("Missing required owner");
+        }
 
         ArtifactOwnerDto dto = new ArtifactOwnerDto(data.getOwner());
         storage.updateArtifactOwner(defaultGroupIdToNull(groupId), artifactId, dto);
@@ -331,15 +283,15 @@ public class GroupsResourceImpl implements GroupsResource {
 
     @Override
     @Authorized(style = AuthorizedStyle.None, level = AuthorizedLevel.Read)
-    public GroupSearchResults listGroups(Integer limit, Integer offset, SortOrder order, SortBy orderby) {
+    public GroupSearchResults listGroups(BigInteger limit, BigInteger offset, SortOrder order, SortBy orderby) {
         if (orderby == null) {
             orderby = SortBy.name;
         }
         if (offset == null) {
-            offset = 0;
+            offset = BigInteger.valueOf(0);
         }
         if (limit == null) {
-            limit = 20;
+            limit = BigInteger.valueOf(20);
         }
 
         final OrderBy oBy = OrderBy.valueOf(orderby.name());
@@ -347,7 +299,7 @@ public class GroupsResourceImpl implements GroupsResource {
 
         Set<SearchFilter> filters = Collections.emptySet();
 
-        GroupSearchResultsDto resultsDto = storage.searchGroups(filters, oBy, oDir, offset, limit);
+        GroupSearchResultsDto resultsDto = storage.searchGroups(filters, oBy, oDir, offset.intValue(), limit.intValue());
         return V2ApiUtil.dtoToSearchResults(resultsDto);
     }
 
@@ -530,21 +482,21 @@ public class GroupsResourceImpl implements GroupsResource {
         }
 
         String artifactType = lookupArtifactType(groupId, artifactId);
-        rulesService.applyRules(defaultGroupIdToNull(groupId), artifactId, artifactType, content, RuleApplicationType.UPDATE, Collections.emptyMap()); //TODO:references not supported for testing update
+        rulesService.applyRules(defaultGroupIdToNull(groupId), artifactId, artifactType, content, RuleApplicationType.UPDATE, Collections.emptyList(), Collections.emptyMap()); //TODO:references not supported for testing update
     }
 
     /**
-     * @see io.apicurio.registry.rest.v2.GroupsResource#getArtifactVersion(java.lang.String, java.lang.String, java.lang.String, java.lang.Boolean)
+     * @see io.apicurio.registry.rest.v2.GroupsResource#getArtifactVersion(java.lang.String, java.lang.String, java.lang.String, io.apicurio.registry.rest.v2.beans.HandleReferencesType)
      */
     @Override
     @Authorized(style = AuthorizedStyle.GroupAndArtifact, level = AuthorizedLevel.Read)
-    public Response getArtifactVersion(String groupId, String artifactId, String version, Boolean dereference) {
+    public Response getArtifactVersion(String groupId, String artifactId, String version, HandleReferencesType references) {
         requireParameter("groupId", groupId);
         requireParameter("artifactId", artifactId);
         requireParameter("version", version);
 
-        if (dereference == null) {
-            dereference = Boolean.FALSE;
+        if (references == null) {
+            references = HandleReferencesType.PRESERVE;
         }
 
         ArtifactVersionMetaDataDto metaData = storage.getArtifactVersionMetaData(defaultGroupIdToNull(groupId), artifactId, version);
@@ -556,12 +508,7 @@ public class GroupsResourceImpl implements GroupsResource {
         MediaType contentType = factory.getArtifactMediaType(metaData.getType());
 
         ContentHandle contentToReturn = artifact.getContent();
-        //TODO:carnalca when dereferencing is implemented, we should return the content dereferenced here
-        /*
-        if (dereference && !artifact.getReferences().isEmpty()) {
-            contentToReturn = factory.getArtifactTypeProvider(metaData.getType()).getContentDereferencer().dereference(artifact.getContent(), storage.resolveReferences(artifact.getReferences()));
-        }
-        */
+        contentToReturn = handleContentReferences(references, metaData.getType(), contentToReturn, artifact.getReferences());  
 
         Response.ResponseBuilder builder = Response.ok(contentToReturn, contentType);
         checkIfDeprecated(metaData::getState, groupId, artifactId, version, builder);
@@ -633,6 +580,67 @@ public class GroupsResourceImpl implements GroupsResource {
 
         storage.deleteArtifactVersionMetaData(defaultGroupIdToNull(groupId), artifactId, version);
     }
+    
+    /**
+     * @see io.apicurio.registry.rest.v2.GroupsResource#addArtifactVersionComment(java.lang.String, java.lang.String, java.lang.String, io.apicurio.registry.rest.v2.beans.NewComment)
+     */
+    @Override
+    @Audited(extractParameters = {"0", KEY_GROUP_ID, "1", KEY_ARTIFACT_ID, "2", KEY_VERSION})
+    @Authorized(style = AuthorizedStyle.GroupAndArtifact, level = AuthorizedLevel.Write)
+    public Comment addArtifactVersionComment(String groupId, String artifactId, String version, NewComment data) {
+        requireParameter("groupId", groupId);
+        requireParameter("artifactId", artifactId);
+        requireParameter("version", version);
+        
+        CommentDto newComment = storage.createArtifactVersionComment(defaultGroupIdToNull(groupId), artifactId, version, data.getValue());
+        return V2ApiUtil.commentDtoToComment(newComment);
+    }
+    
+    /**
+     * @see io.apicurio.registry.rest.v2.GroupsResource#deleteArtifactVersionComment(java.lang.String, java.lang.String, java.lang.String, java.lang.String)
+     */
+    @Override
+    @Audited(extractParameters = {"0", KEY_GROUP_ID, "1", KEY_ARTIFACT_ID, "2", KEY_VERSION, "3", "comment_id"})
+    @Authorized(style = AuthorizedStyle.GroupAndArtifact, level = AuthorizedLevel.Write)
+    public void deleteArtifactVersionComment(String groupId, String artifactId, String version, String commentId) {
+        requireParameter("groupId", groupId);
+        requireParameter("artifactId", artifactId);
+        requireParameter("version", version);
+        requireParameter("commentId", commentId);
+
+        storage.deleteArtifactVersionComment(defaultGroupIdToNull(groupId), artifactId, version, commentId);
+    }
+    
+    /**
+     * @see io.apicurio.registry.rest.v2.GroupsResource#getArtifactVersionComments(java.lang.String, java.lang.String, java.lang.String)
+     */
+    @Override
+    @Authorized(style = AuthorizedStyle.GroupAndArtifact, level = AuthorizedLevel.Read)
+    public List<Comment> getArtifactVersionComments(String groupId, String artifactId, String version) {
+        requireParameter("groupId", groupId);
+        requireParameter("artifactId", artifactId);
+        requireParameter("version", version);
+
+        return storage.getArtifactVersionComments(defaultGroupIdToNull(groupId), artifactId, version).stream()
+                .map(V2ApiUtil::commentDtoToComment)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * @see io.apicurio.registry.rest.v2.GroupsResource#updateArtifactVersionComment(java.lang.String, java.lang.String, java.lang.String, java.lang.String, io.apicurio.registry.rest.v2.beans.NewComment)
+     */
+    @Override
+    @Audited(extractParameters = {"0", KEY_GROUP_ID, "1", KEY_ARTIFACT_ID, "2", KEY_VERSION, "3", "comment_id"})
+    @Authorized(style = AuthorizedStyle.GroupAndArtifact, level = AuthorizedLevel.Write)
+    public void updateArtifactVersionComment(String groupId, String artifactId, String version, String commentId, NewComment data) {
+        requireParameter("groupId", groupId);
+        requireParameter("artifactId", artifactId);
+        requireParameter("version", version);
+        requireParameter("commentId", commentId);
+        requireParameter("value", data.getValue());
+
+        storage.updateArtifactVersionComment(defaultGroupIdToNull(groupId), artifactId, version, commentId, data.getValue());
+    }
 
     /**
      * @see io.apicurio.registry.rest.v2.GroupsResource#updateArtifactVersionState(java.lang.String, java.lang.String, java.lang.String, io.apicurio.registry.rest.v2.beans.UpdateState)
@@ -653,7 +661,7 @@ public class GroupsResourceImpl implements GroupsResource {
      */
     @Override
     @Authorized(style = AuthorizedStyle.GroupOnly, level = AuthorizedLevel.Read)
-    public ArtifactSearchResults listArtifactsInGroup(String groupId, Integer limit, Integer offset,
+    public ArtifactSearchResults listArtifactsInGroup(String groupId, BigInteger limit, BigInteger offset,
                                                       SortOrder order, SortBy orderby) {
         requireParameter("groupId", groupId);
 
@@ -661,10 +669,10 @@ public class GroupsResourceImpl implements GroupsResource {
             orderby = SortBy.name;
         }
         if (offset == null) {
-            offset = 0;
+            offset = BigInteger.valueOf(0);
         }
         if (limit == null) {
-            limit = 20;
+            limit = BigInteger.valueOf(20);
         }
 
         final OrderBy oBy = OrderBy.valueOf(orderby.name());
@@ -673,7 +681,7 @@ public class GroupsResourceImpl implements GroupsResource {
         Set<SearchFilter> filters = new HashSet<>();
         filters.add(SearchFilter.ofGroup(defaultGroupIdToNull(groupId)));
 
-        ArtifactSearchResultsDto resultsDto = storage.searchArtifacts(filters, oBy, oDir, offset, limit);
+        ArtifactSearchResultsDto resultsDto = storage.searchArtifacts(filters, oBy, oDir, offset.intValue(), limit.intValue());
         return V2ApiUtil.dtoToSearchResults(resultsDto);
     }
 
@@ -806,6 +814,7 @@ public class GroupsResourceImpl implements GroupsResource {
      * @param data
      * @param references
      */
+    @SuppressWarnings("deprecation")
     private ArtifactMetaData createArtifactWithRefs(String groupId, String xRegistryArtifactType, String xRegistryArtifactId,
                                                     String xRegistryVersion, IfExists ifExists, Boolean canonical,
                                                     String xRegistryDescription, String xRegistryDescriptionEncoded,
@@ -877,7 +886,7 @@ public class GroupsResourceImpl implements GroupsResource {
             //Try to resolve the new artifact references and the nested ones (if any)
             final Map<String, ContentHandle> resolvedReferences = storage.resolveReferences(referencesAsDtos);
 
-            rulesService.applyRules(defaultGroupIdToNull(groupId), artifactId, artifactType, content, RuleApplicationType.CREATE, resolvedReferences);
+            rulesService.applyRules(defaultGroupIdToNull(groupId), artifactId, artifactType, content, RuleApplicationType.CREATE, references, resolvedReferences);
 
             final String finalArtifactId = artifactId;
             EditableArtifactMetaDataDto metaData = getEditableMetaData(artifactName, artifactDescription);
@@ -894,18 +903,18 @@ public class GroupsResourceImpl implements GroupsResource {
      */
     @Override
     @Authorized(style = AuthorizedStyle.GroupAndArtifact, level = AuthorizedLevel.Read)
-    public VersionSearchResults listArtifactVersions(String groupId, String artifactId, Integer offset, Integer limit) {
+    public VersionSearchResults listArtifactVersions(String groupId, String artifactId, BigInteger offset, BigInteger limit) {
         requireParameter("groupId", groupId);
         requireParameter("artifactId", artifactId);
 
         if (offset == null) {
-            offset = 0;
+            offset = BigInteger.valueOf(0);
         }
         if (limit == null) {
-            limit = 20;
+            limit = BigInteger.valueOf(20);
         }
 
-        VersionSearchResultsDto resultsDto = storage.searchVersions(defaultGroupIdToNull(groupId), artifactId, offset, limit);
+        VersionSearchResultsDto resultsDto = storage.searchVersions(defaultGroupIdToNull(groupId), artifactId, offset.intValue(), limit.intValue());
         return V2ApiUtil.dtoToSearchResults(resultsDto);
     }
 
@@ -975,7 +984,7 @@ public class GroupsResourceImpl implements GroupsResource {
         final Map<String, ContentHandle> resolvedReferences = storage.resolveReferences(referencesAsDtos);
 
         String artifactType = lookupArtifactType(groupId, artifactId);
-        rulesService.applyRules(defaultGroupIdToNull(groupId), artifactId, artifactType, content, RuleApplicationType.UPDATE, resolvedReferences);
+        rulesService.applyRules(defaultGroupIdToNull(groupId), artifactId, artifactType, content, RuleApplicationType.UPDATE, references, resolvedReferences);
         EditableArtifactMetaDataDto metaData = getEditableMetaData(artifactName, artifactDescription);
         ArtifactMetaDataDto amd = storage.updateArtifactWithMetadata(defaultGroupIdToNull(groupId), artifactId, xRegistryVersion, artifactType, content, metaData, referencesAsDtos);
         return V2ApiUtil.dtoToVersionMetaData(defaultGroupIdToNull(groupId), artifactId, artifactType, amd);
@@ -1083,7 +1092,7 @@ public class GroupsResourceImpl implements GroupsResource {
 
         final Map<String, ContentHandle> resolvedReferences = storage.resolveReferences(referencesAsDtos);
 
-        rulesService.applyRules(defaultGroupIdToNull(groupId), artifactId, artifactType, content, RuleApplicationType.UPDATE, resolvedReferences);
+        rulesService.applyRules(defaultGroupIdToNull(groupId), artifactId, artifactType, content, RuleApplicationType.UPDATE, references, resolvedReferences);
         EditableArtifactMetaDataDto metaData = getEditableMetaData(name, description);
         ArtifactMetaDataDto dto = storage.updateArtifactWithMetadata(defaultGroupIdToNull(groupId), artifactId, version, artifactType, content, metaData, referencesAsDtos);
         return V2ApiUtil.dtoToMetaData(defaultGroupIdToNull(groupId), artifactId, artifactType, dto);
@@ -1108,4 +1117,5 @@ public class GroupsResourceImpl implements GroupsResource {
                 .map(V2ApiUtil::referenceToDto)
                 .collect(Collectors.toList());
     }
+
 }

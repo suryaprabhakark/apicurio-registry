@@ -90,13 +90,11 @@ module.exports = (env, argv) => {
     plugins: [
       new WebpackShellPluginNext({
         onBuildStart:{
-          scripts: [
-            'rm -rf client-gen/dist',
-            'curl -sL https://github.com/andreaTP/apicurio-client-gen-poc/releases/download/0.0.8/dist.tar.gz | tar -xz -C client-gen'
-          ],
+          scripts: [ 'resources/download-client-gen-dist.sh' ],
           blocking: true,
           parallel: false
-        }
+        },
+        safe: true,
       }),
       new CopyPlugin({
         patterns: [

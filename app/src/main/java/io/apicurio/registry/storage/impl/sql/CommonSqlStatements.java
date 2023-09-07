@@ -459,10 +459,12 @@ public abstract class CommonSqlStatements implements SqlStatements {
     public String deleteAllProperties() {
         return "DELETE FROM properties WHERE tenantId = ? AND globalId IN (SELECT globalId FROM versions WHERE tenantId = ?)";
     }
+    
+    @Override
+    public String deleteAllComments() {
+        return "DELETE FROM comments WHERE tenantId = ? AND globalId IN (SELECT globalId FROM versions WHERE tenantId = ?)";
+    }
 
-    /**
-     * @see io.apicurio.registry.storage.impl.sql.SqlStatements#deleteVersions()
-     */
     @Override
     public String deleteVersions() {
         return "DELETE FROM versions WHERE tenantId = ? AND groupId = ? AND artifactId = ?";
@@ -545,6 +547,14 @@ public abstract class CommonSqlStatements implements SqlStatements {
     @Override
     public String deleteVersionProperties() {
         return "DELETE FROM properties WHERE tenantId = ? AND globalId IN (SELECT v.globalId FROM versions v WHERE v.tenantId = ? AND v.groupId = ? AND v.artifactId = ? AND v.version = ?)";
+    }
+    
+    /**
+     * @see io.apicurio.registry.storage.impl.sql.SqlStatements#deleteVersionComments()
+     */
+    @Override
+    public String deleteVersionComments() {
+        return "DELETE FROM comments WHERE tenantId = ? AND globalId IN (SELECT v.globalId FROM versions v WHERE v.tenantId = ? AND v.groupId = ? AND v.artifactId = ? AND v.version = ?)";
     }
 
     /**
@@ -686,30 +696,6 @@ public abstract class CommonSqlStatements implements SqlStatements {
     }
 
     /**
-     * @see io.apicurio.registry.storage.impl.sql.SqlStatements#selectLogConfigurationByLogger()
-     */
-    @Override
-    public String selectLogConfigurationByLogger() {
-        return "SELECT l.logger, l.loglevel FROM logconfiguration l WHERE l.logger = ?";
-    }
-
-    /**
-     * @see io.apicurio.registry.storage.impl.sql.SqlStatements#deleteLogConfiguration()
-     */
-    @Override
-    public String deleteLogConfiguration() {
-        return "DELETE FROM logconfiguration WHERE logger = ?";
-    }
-
-    /**
-     * @see io.apicurio.registry.storage.impl.sql.SqlStatements#selectAllLogConfigurations()
-     */
-    @Override
-    public String selectAllLogConfigurations() {
-        return "SELECT l.logger, l.loglevel FROM logconfiguration l";
-    }
-
-    /**
      * @see io.apicurio.registry.storage.impl.sql.SqlStatements#insertGroup()
      */
     @Override
@@ -778,6 +764,14 @@ public abstract class CommonSqlStatements implements SqlStatements {
                 "WHERE v.tenantId = ?";
     }
 
+    /**
+     * @see io.apicurio.registry.storage.impl.sql.SqlStatements#exportComments()
+     */
+    @Override
+    public String exportComments() {
+        return "SELECT * FROM comments c WHERE c.tenantId = ?";
+    }
+    
     /**
      * @see io.apicurio.registry.storage.impl.sql.SqlStatements#exportContent()
      */
@@ -852,13 +846,21 @@ public abstract class CommonSqlStatements implements SqlStatements {
     public String selectMaxContentId() {
         return "SELECT MAX(contentId) FROM content WHERE tenantId = ?";
     }
-
+    
     /**
      * @see io.apicurio.registry.storage.impl.sql.SqlStatements#selectMaxGlobalId()
      */
     @Override
     public String selectMaxGlobalId() {
         return "SELECT MAX(globalId) FROM versions WHERE tenantId = ?";
+    }
+
+    /**
+     * @see io.apicurio.registry.storage.impl.sql.SqlStatements#selectMaxCommentId()
+     */
+    @Override
+    public String selectMaxCommentId() {
+        return "SELECT MAX(commentId) FROM comments WHERE tenantId = ?";
     }
 
     /**
@@ -1042,6 +1044,11 @@ public abstract class CommonSqlStatements implements SqlStatements {
     }
 
     @Override
+    public String selectInboundReferencesByGAV() {
+        return "SELECT DISTINCT v.groupId, v.artifactId, v.version, ar.name as name FROM versions v JOIN artifactreferences ar ON v.tenantId=ar.tenantId AND v.contentId=ar.contentId WHERE ar.tenantId=? AND ar.groupId=? AND ar.artifactId=? AND ar.version=?";
+    }
+
+    @Override
     public String insertSequenceValue() {
         return "INSERT INTO sequences (tenantId, name, value) VALUES (?, ?, ?)";
     }
@@ -1049,6 +1056,28 @@ public abstract class CommonSqlStatements implements SqlStatements {
     @Override
     public String selectCurrentSequenceValue() {
         return "SELECT value FROM sequences WHERE name = ? AND tenantId = ? ";
+    }
+
+    @Override
+    public String insertComment() {
+        return "INSERT INTO comments (tenantId, commentId, globalId, createdBy, createdOn, cvalue) VALUES (?, ?, ?, ?, ?, ?)";
+    }
+    
+    @Override
+    public String selectComments() {
+        return "SELECT c.* "
+                + "FROM comments c JOIN versions v ON v.tenantId = c.tenantId AND v.globalId = c.globalId "
+                + "WHERE v.tenantId = ? AND v.groupId = ? AND v.artifactId = ? AND v.version = ? ORDER BY c.createdOn DESC";
+    }
+    
+    @Override
+    public String deleteComment() {
+        return "DELETE FROM comments WHERE tenantId = ? AND globalId = ? AND commentId = ? AND createdBy = ?";
+    }
+    
+    @Override
+    public String updateComment() {
+        return "UPDATE comments SET cvalue = ? WHERE tenantId = ? AND globalId = ? AND commentId = ? AND createdBy = ?";
     }
 
 }

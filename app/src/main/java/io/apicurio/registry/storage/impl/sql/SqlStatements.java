@@ -196,7 +196,6 @@ public interface SqlStatements {
 
     /**
      * A statement to update canonicalHash value in a row in the "content" table
-     * The only statement that allows to modify an existing row in the "content" table
      */
     public String updateContentCanonicalHash();
 
@@ -332,6 +331,11 @@ public interface SqlStatements {
     public String deleteAllProperties();
 
     /**
+     * A statement to delete all comments for all versions for all artifacts
+     */
+    public String deleteAllComments();
+
+    /**
      * A statement to delete all versions for a single artifact.
      */
     public String deleteVersions();
@@ -387,6 +391,11 @@ public interface SqlStatements {
     public String deleteVersionProperties();
 
     /**
+     * A statement to delete the comments for a single artifact version.
+     */
+    public String deleteVersionComments();
+
+    /**
      * A statement to delete a single artifact version.
      */
     public String deleteVersion();
@@ -412,9 +421,14 @@ public interface SqlStatements {
     public String selectContentIdsReferencingArtifactBy();
 
     /**
-     * A statement to select global ids of artifact versions with content referencing artifact
+     * A statement to select global ids of artifact versions with content referencing an artifact
      */
     public String selectGlobalIdsReferencingArtifactBy();
+
+    /**
+     * A statement to select GAV info of artifact versions with content referencing an artifact
+     */
+    public String selectInboundReferencesByGAV();
 
     /**
      * A statement to select the number of artifacts with a given artifactId (should be 0 or 1).
@@ -460,26 +474,6 @@ public interface SqlStatements {
      * A statement to delete all content owned by a tenantId
      */
     public String deleteAllContent();
-
-    /**
-     * A statement to select the log configuration for a given logger name
-     */
-    public String selectLogConfigurationByLogger();
-
-    /**
-     * A statement to "upsert" a row in the "logconfiguration" table
-     */
-    public String upsertLogConfiguration();
-
-    /**
-     * A statement to delete a row in the "logconfiguration" table
-     */
-    public String deleteLogConfiguration();
-
-    /**
-     * A statement to select all rows in the "logconfiguration" table
-     */
-    public String selectAllLogConfigurations();
 
     /**
      * A statement used to insert a row into the groups table.
@@ -535,6 +529,8 @@ public interface SqlStatements {
 
     public String exportArtifactRules();
 
+    public String exportComments();
+
     public String exportArtifactVersions();
 
     /*
@@ -554,6 +550,8 @@ public interface SqlStatements {
     public String selectMaxContentId();
 
     public String selectMaxGlobalId();
+
+    public String selectMaxCommentId();
 
     public String selectContentExists();
 
@@ -613,4 +611,17 @@ public interface SqlStatements {
     public String deleteAllReferences();
 
     public String deleteOrphanedReferences();
+
+    /*
+     * The next statements relate to comments.
+     */
+
+    public String insertComment();
+    
+    public String selectComments();
+
+    public String deleteComment();
+
+    public String updateComment();
+
 }

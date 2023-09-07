@@ -15,23 +15,21 @@
  */
 package io.apicurio.registry.metrics;
 
-import io.apicurio.registry.mt.TenantContext;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import org.slf4j.Logger;
 
-import javax.enterprise.context.ApplicationScoped;
-import javax.enterprise.inject.Default;
-import javax.inject.Inject;
-import javax.ws.rs.Path;
-import javax.ws.rs.container.ContainerRequestContext;
-import javax.ws.rs.container.ContainerRequestFilter;
-import javax.ws.rs.container.ContainerResponseContext;
-import javax.ws.rs.container.ContainerResponseFilter;
-import javax.ws.rs.container.ResourceInfo;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.ext.Provider;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Default;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.container.ContainerRequestContext;
+import jakarta.ws.rs.container.ContainerRequestFilter;
+import jakarta.ws.rs.container.ContainerResponseContext;
+import jakarta.ws.rs.container.ContainerResponseFilter;
+import jakarta.ws.rs.container.ResourceInfo;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.ext.Provider;
 import java.io.IOException;
 import java.util.regex.Pattern;
 
@@ -56,13 +54,7 @@ import static io.apicurio.registry.metrics.MetricsConstants.REST_REQUESTS_TAG_ST
 public class RestMetricsResponseFilter implements ContainerRequestFilter, ContainerResponseFilter {
 
     @Inject
-    Logger log;
-
-    @Inject
     MeterRegistry registry;
-
-    @Inject
-    TenantContext tenantContext;
 
     public static final String TIMER_SAMPLE_CONTEXT_PROPERTY_NAME = "request-timer-sample";
 
@@ -70,7 +62,7 @@ public class RestMetricsResponseFilter implements ContainerRequestFilter, Contai
     private ResourceInfo resourceInfo;
 
     // I couldn't figure out an easy way to use an annotation that can be applied on the whole REST resource class,
-    // instead of on each method (or javax.ws.rs.core.Application).
+    // instead of on each method (or jakarta.ws.rs.core.Application).
     // See https://docs.oracle.com/javaee/7/api/javax/ws/rs/NameBinding.html
     static final Pattern ENABLED_PATTERN = Pattern.compile("/apis/.*");
 
@@ -85,30 +77,30 @@ public class RestMetricsResponseFilter implements ContainerRequestFilter, Contai
 
     @Override
     public void filter(ContainerRequestContext requestContext, ContainerResponseContext responseContext)
-        throws IOException {
+            throws IOException {
 
         if (requestContext.getProperty(TIMER_SAMPLE_CONTEXT_PROPERTY_NAME) == null) {
             return;
         }
 
         Timer timer = Timer
-            .builder(REST_REQUESTS)
-            .description(REST_REQUESTS_DESCRIPTION)
-            .tag(REST_REQUESTS_TAG_PATH, this.getPath())
-            .tag(REST_REQUESTS_TAG_METHOD, requestContext.getMethod())
-            .tag(REST_REQUESTS_TAG_STATUS_CODE_FAMILY, this.getStatusGroup(responseContext.getStatus()))
-            .register(registry);
+                .builder(REST_REQUESTS)
+                .description(REST_REQUESTS_DESCRIPTION)
+                .tag(REST_REQUESTS_TAG_PATH, this.getPath())
+                .tag(REST_REQUESTS_TAG_METHOD, requestContext.getMethod())
+                .tag(REST_REQUESTS_TAG_STATUS_CODE_FAMILY, this.getStatusGroup(responseContext.getStatus()))
+                .register(registry);
 
         Timer.Sample sample = (Timer.Sample) requestContext.getProperty(TIMER_SAMPLE_CONTEXT_PROPERTY_NAME);
         sample.stop(timer);
 
         Counter.builder(REST_REQUESTS_COUNTER)
-            .description(REST_REQUESTS_COUNTER_DESCRIPTION)
-            .tag(REST_REQUESTS_TAG_PATH, this.getPath())
-            .tag(REST_REQUESTS_TAG_METHOD, requestContext.getMethod())
-            .tag(REST_REQUESTS_TAG_STATUS_CODE_FAMILY, this.getStatusGroup(responseContext.getStatus()))
-            .register(registry)
-            .increment();
+                .description(REST_REQUESTS_COUNTER_DESCRIPTION)
+                .tag(REST_REQUESTS_TAG_PATH, this.getPath())
+                .tag(REST_REQUESTS_TAG_METHOD, requestContext.getMethod())
+                .tag(REST_REQUESTS_TAG_STATUS_CODE_FAMILY, this.getStatusGroup(responseContext.getStatus()))
+                .register(registry)
+                .increment();
     }
 
     private String getStatusGroup(int statusCode) {

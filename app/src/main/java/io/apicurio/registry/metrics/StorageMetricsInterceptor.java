@@ -1,14 +1,14 @@
 package io.apicurio.registry.metrics;
 
-import io.apicurio.registry.mt.TenantContext;
+import io.apicurio.common.apps.multitenancy.TenantContext;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.eclipse.microprofile.context.ThreadContext;
 
-import javax.inject.Inject;
-import javax.interceptor.AroundInvoke;
-import javax.interceptor.Interceptor;
-import javax.interceptor.InvocationContext;
+import jakarta.inject.Inject;
+import jakarta.interceptor.AroundInvoke;
+import jakarta.interceptor.Interceptor;
+import jakarta.interceptor.InvocationContext;
 import java.lang.reflect.Method;
 import java.util.concurrent.CompletionStage;
 

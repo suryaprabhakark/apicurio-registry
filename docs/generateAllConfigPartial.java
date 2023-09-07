@@ -154,7 +154,13 @@ public class generateAllConfigPartial {
             }
             switch (annotation.target().kind()) {
                 case FIELD:
-                    configName = configName.replace("app.authn.", "registry.auth.");
+                    configName = configName.replace("app.authn.", "registry.auth.")
+                            .replace("app.multitenancy", "registry.multitenancy")
+                            .replace("app.enable.multitenancy", "registry.enable.multitenancy")
+                            .replace("app.tenant.manager", "registry.tenant.manager")
+                            .replace("app.tenants.", "registry.tenants.");
+
+
                     var defaultValue = Optional.ofNullable(annotation.value("defaultValue")).map(v -> v.value().toString()).orElse("");
                     var type = annotation.target().asField().type();
 
@@ -173,6 +179,16 @@ public class generateAllConfigPartial {
 
                     var category = Optional.ofNullable(info.get().value("category")).map(v -> v.value().toString()).orElse("");
                     var description = Optional.ofNullable(info.get().value("description")).map(v -> v.value().toString()).orElse("");
+
+                    // TODO Remove this after updating common-app-components to 0.1.22
+                    if ("registry.enable.multitenancy.standalone".equals(configName)) {
+                        description = "Enable Standalone Multitenancy mode. " +
+                                "In this mode, Registry provides basic multi-tenancy features, without dependencies on additional components " +
+                                "to manage tenants and their metadata. A new tenant is simply created as soon as a tenant ID is extracted " +
+                                "from the request for the first time. The tenant IDs must be managed externally, " +
+                                "and tenants can be effectively deleted by deleting their data.";
+                    }
+
                     var availableSince = Optional.ofNullable(info.get().value("registryAvailableSince"))
                             .map(v -> v.value().toString()).
                             orElse(Optional.ofNullable(info.get().value("availableSince"))
@@ -210,6 +226,7 @@ public class generateAllConfigPartial {
         // TODO: include all the relevant jars, to be determined
         // Extract configuration from Jandex
         extractConfigurations(baseDir + "/../app/target/lib/io.apicurio.apicurio-common-app-components-auth-" + commonComponentsVersion + ".jar", allConfiguration);
+        extractConfigurations(baseDir + "/../app/target/lib/io.apicurio.apicurio-common-app-components-multitenancy-" + commonComponentsVersion + ".jar", allConfiguration);
         extractConfigurations(baseDir + "/../app/target/apicurio-registry-app-" + currentVersion + ".jar", allConfiguration);
 
         // TODO
@@ -219,7 +236,7 @@ public class generateAllConfigPartial {
         Properties props = new Properties();
         try {
             //load a properties file from class path, inside static method
-            props.load(new FileInputStream(baseDir + "../app/src/main/resources/application.properties"));
+            props.load(new FileInputStream(baseDir + "/../app/src/main/resources/application.properties"));
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -270,10 +287,10 @@ public class generateAllConfigPartial {
 
             for (var category : categories.stream().sorted().collect(Collectors.toList())) {
 
-                dest.write("== Category `" + category + "`:\n");
+                dest.write("== " + category + "\n");
 
-                dest.write(".Category `" + category + "` configuration options\n");
-                dest.write("[.table-expandable,width=\"100%\",cols=\"5,2,5,3,4\",options=\"header\"]\n");
+                dest.write("." + category + " configuration options\n");
+                dest.write("[.table-expandable,width=\"100%\",cols=\"6,3,2,3,5\",options=\"header\"]\n");
                 dest.write("|===\n");
                 dest.write("|Name\n");
                 dest.write("|Type\n");

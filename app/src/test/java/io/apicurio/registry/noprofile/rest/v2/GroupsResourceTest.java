@@ -16,48 +16,13 @@
 
 package io.apicurio.registry.noprofile.rest.v2;
 
-import com.google.common.hash.Hashing;
-import io.apicurio.registry.AbstractResourceTestBase;
-import io.apicurio.registry.rest.v2.beans.ArtifactMetaData;
-import io.apicurio.registry.rest.v2.beans.ArtifactReference;
-import io.apicurio.registry.rest.v2.beans.EditableMetaData;
-import io.apicurio.registry.rest.v2.beans.IfExists;
-import io.apicurio.registry.rest.v2.beans.Rule;
-import io.apicurio.registry.rest.v2.beans.VersionMetaData;
-import io.apicurio.registry.rules.compatibility.jsonschema.diff.DiffType;
-import io.apicurio.registry.storage.impl.sql.SqlUtil;
-import io.apicurio.registry.types.ArtifactType;
-import io.apicurio.registry.types.RuleType;
-import io.apicurio.registry.utils.tests.TestUtils;
-import io.quarkus.test.junit.QuarkusTest;
-import io.restassured.common.mapper.TypeRef;
-import io.restassured.config.EncoderConfig;
-import io.restassured.config.RestAssuredConfig;
-import io.restassured.http.ContentType;
-import io.restassured.response.ValidatableResponse;
-import org.apache.commons.codec.digest.DigestUtils;
-import org.hamcrest.Matchers;
-import org.jose4j.base64url.Base64;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
-import org.junit.jupiter.api.condition.DisabledOnOs;
-import org.junit.jupiter.api.condition.OS;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
 import static io.restassured.RestAssured.given;
+import static java.net.HttpURLConnection.HTTP_NO_CONTENT;
 import static java.net.HttpURLConnection.HTTP_OK;
 import static org.hamcrest.CoreMatchers.anyOf;
 import static org.hamcrest.CoreMatchers.anything;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.endsWith;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.equalToObject;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -66,7 +31,57 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.apache.commons.codec.digest.DigestUtils;
+import org.hamcrest.Matchers;
+import org.jose4j.base64url.Base64;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
+
+import com.google.common.hash.Hashing;
+
+import io.apicurio.registry.AbstractResourceTestBase;
+import io.apicurio.registry.rest.client.exception.RuleViolationException;
+import io.apicurio.registry.rest.v2.beans.ArtifactOwner;
+import io.apicurio.registry.rest.v2.beans.ArtifactMetaData;
+import io.apicurio.registry.rest.v2.beans.ArtifactReference;
+import io.apicurio.registry.rest.v2.beans.Comment;
+import io.apicurio.registry.rest.v2.beans.EditableMetaData;
+import io.apicurio.registry.rest.v2.beans.IfExists;
+import io.apicurio.registry.rest.v2.beans.NewComment;
+import io.apicurio.registry.rest.v2.beans.Rule;
+import io.apicurio.registry.rest.v2.beans.VersionMetaData;
+import io.apicurio.registry.rules.compatibility.jsonschema.diff.DiffType;
+import io.apicurio.registry.storage.impl.sql.SqlUtil;
+import io.apicurio.registry.types.ArtifactType;
+import io.apicurio.registry.types.ReferenceType;
+import io.apicurio.registry.types.RuleType;
+import io.apicurio.registry.utils.tests.TestUtils;
+import io.quarkus.test.junit.QuarkusTest;
+import io.restassured.common.mapper.TypeRef;
+import io.restassured.config.EncoderConfig;
+import io.restassured.config.RestAssuredConfig;
+import io.restassured.http.ContentType;
+import io.restassured.response.ValidatableResponse;
 
 /**
  * @author eric.wittmann@gmail.com
@@ -130,42 +145,43 @@ public class GroupsResourceTest extends AbstractResourceTestBase {
                 .statusCode(200)
                 .body("openapi", not(equalTo("3.0.2")))
                 .body("info.title", not(equalTo("Empty API")));
-
-        // Test using v1 API to access artifact in the null group
-        given()
-                .when()
-                .pathParam("artifactId", "testDefaultGroup/EmptyAPI/1")
-                .get("/registry/v1/artifacts/{artifactId}")
-                .then()
-                .statusCode(200)
-                .body("openapi", equalTo("3.0.2"))
-                .body("info.title", equalTo("Empty API"));
-
-        // Create artifact using V1 API
-        createArtifact("testDefaultGroup/EmptyAPI/6", ArtifactType.OPENAPI, oaiArtifactContent);
-
-        // Test using v1 API to access artifact
-        given()
-                .when()
-                .pathParam("artifactId", "testDefaultGroup/EmptyAPI/6")
-                .get("/registry/v1/artifacts/{artifactId}")
-                .then()
-                .statusCode(200)
-                .body("openapi", equalTo("3.0.2"))
-                .body("info.title", equalTo("Empty API"));
-
-        // Test using v2 API to access artifact
-        given()
-                .when()
-                .pathParam("groupId", nullGroup)
-                .pathParam("artifactId", "testDefaultGroup/EmptyAPI/6")
-                .get("/registry/v2/groups/{groupId}/artifacts/{artifactId}")
-                .then()
-                .statusCode(200)
-                .body("openapi", equalTo("3.0.2"))
-                .body("info.title", equalTo("Empty API"));
     }
 
+    @Test
+    public void testUpdateArtifactOwner() throws Exception {
+        String oaiArtifactContent = resourceToString("openapi-empty.json");
+        createArtifact("testUpdateArtifactOwner", "testUpdateArtifactOwner/EmptyAPI/1",ArtifactType.OPENAPI, oaiArtifactContent);
+
+        ArtifactOwner artifactOwner = new ArtifactOwner("newOwner");
+
+        given()
+                .when()
+                .contentType(CT_JSON)
+                .pathParam("groupId", "testUpdateArtifactOwner")
+                .pathParam("artifactId", "testUpdateArtifactOwner/EmptyAPI/1")
+                .body(artifactOwner)
+                .put("/registry/v2/groups/{groupId}/artifacts/{artifactId}/owner")
+                .then()
+                .statusCode(204);
+    }
+
+    @Test
+    public void testUpdateEmptyArtifactOwner() throws Exception {
+        String oaiArtifactContent = resourceToString("openapi-empty.json");
+        createArtifact("testUpdateEmptyArtifactOwner", "testUpdateEmptyArtifactOwner/EmptyAPI/1",ArtifactType.OPENAPI, oaiArtifactContent);
+
+        ArtifactOwner artifactOwner = new ArtifactOwner("");
+
+        given()
+                .when()
+                .contentType(CT_JSON)
+                .pathParam("groupId", "testUpdateEmptyArtifactOwner")
+                .pathParam("artifactId", "testUpdateEmptyArtifactOwner/EmptyAPI/1")
+                .body(artifactOwner)
+                .put("/registry/v2/groups/{groupId}/artifacts/{artifactId}/owner")
+                .then()
+                .statusCode(400);
+    }
 
     @Test
     public void testMultipleGroups() throws Exception {
@@ -1676,7 +1692,6 @@ public class GroupsResourceTest extends AbstractResourceTestBase {
         String title = "Empty API " + idx;
         String artifactId = "Empty-" + idx;
         this.createArtifact(group, artifactId, ArtifactType.OPENAPI, artifactContent.replaceAll("Empty API", title));
-        waitForArtifact(group, artifactId);
 
         Map<String, String> props = new HashMap<>();
         props.put("test-key", null);
@@ -1834,8 +1849,6 @@ public class GroupsResourceTest extends AbstractResourceTestBase {
                 .body("description", equalTo("An example API design using OpenAPI."))
                 .body("type", equalTo(artifactType));
 
-        this.waitForArtifact(GROUP, artifactId);
-
         // Get the artifact content (should be JSON)
         given()
                 .when()
@@ -1870,8 +1883,6 @@ public class GroupsResourceTest extends AbstractResourceTestBase {
                 .statusCode(200)
                 .body("id", equalTo(artifactId))
                 .body("type", equalTo(artifactType));
-
-        this.waitForArtifact(GROUP, artifactId);
 
         // Get the artifact content (should be XML)
         given()
@@ -1941,9 +1952,7 @@ public class GroupsResourceTest extends AbstractResourceTestBase {
                 .body("createdOn", anything())
                 .body("version", equalTo("2"))
                 .body("description", equalTo("An example API design using OpenAPI."));
-        Integer globalId2 = resp.extract().body().path("globalId");
-
-        this.waitForGlobalId(globalId2);
+        /*Integer globalId2 = */resp.extract().body().path("globalId");
 
         // Try to create the same artifact ID with ReturnOrUpdate - should return v1 (matching content)
         resp = given()
@@ -2116,15 +2125,6 @@ public class GroupsResourceTest extends AbstractResourceTestBase {
                 .body("openapi", equalTo("3.0.2"))
                 .body("info.title", equalTo("Empty API"));
 
-        given()
-                .when()
-                .pathParam("artifactId", artifactId)
-                .get("/registry/v1/artifacts/{artifactId}")
-                .then()
-                .statusCode(200)
-                .body("openapi", not(equalTo("3.0.2")))
-                .body("info.title", not(equalTo("Empty API")));
-
         // Verify the metadata
         given()
                 .when()
@@ -2140,21 +2140,6 @@ public class GroupsResourceTest extends AbstractResourceTestBase {
                 .body("createdOn", anything())
                 .body("name", equalTo("Empty API"))
                 .body("description", equalTo("An example API design using OpenAPI."));
-
-        given()
-                .when()
-                .pathParam("artifactId", artifactId)
-                .get("/registry/v1/artifacts/{artifactId}/meta")
-                .then()
-                .statusCode(200)
-                .body("groupId", nullValue())
-                .body("id", equalTo(artifactId))
-                .body("version", anything())
-                .body("type", equalTo(ArtifactType.OPENAPI))
-                .body("createdOn", anything())
-                .body("name", not(equalTo("Empty API")))
-                .body("description", not(equalTo("An example API design using OpenAPI.")));
-
     }
 
     @Test
@@ -2179,7 +2164,6 @@ public class GroupsResourceTest extends AbstractResourceTestBase {
                 .body("id", equalTo(artifactId))
                 .body("groupId", equalTo(groupId))
                 .body("version", equalTo("1.0.0"));
-        waitForArtifact(groupId, artifactId);
 
         // Make sure we can get the artifact content by version
         given()
@@ -2358,7 +2342,8 @@ public class GroupsResourceTest extends AbstractResourceTestBase {
         var metadata = response
                 .statusCode(HTTP_OK)
                 .extract().as(ArtifactMetaData.class);
-        waitForArtifact(metadata.getId());
+        // Save the metadata for artifact #1 for later use
+        var referencedMD = metadata;
 
         // Create #2 referencing the #1, using different content
         List<ArtifactReference> references = List.of(ArtifactReference.builder()
@@ -2374,7 +2359,8 @@ public class GroupsResourceTest extends AbstractResourceTestBase {
         metadata = response
                 .statusCode(HTTP_OK)
                 .extract().as(ArtifactMetaData.class);
-        waitForArtifact(metadata.getId());
+        // Save the referencing artifact metadata for later use
+        var referencingMD = metadata;
         assertEquals(references, metadata.getReferences());
 
 
@@ -2454,6 +2440,40 @@ public class GroupsResourceTest extends AbstractResourceTestBase {
                 });
 
         assertEquals(references, referenceResponse);
+
+        // Get INBOUND references via GAV
+        referenceResponse = given()
+                .when()
+                .pathParam("groupId", referencedMD.getGroupId() == null ? "default" : referencedMD.getGroupId())
+                .pathParam("artifactId", referencedMD.getId())
+                .pathParam("version", referencedMD.getVersion())
+                .queryParam("refType", ReferenceType.INBOUND)
+                .get("/registry/v2/groups/{groupId}/artifacts/{artifactId}/versions/{version}/references")
+                .then()
+                .statusCode(HTTP_OK)
+                .extract().as(new TypeRef<List<ArtifactReference>>() {
+                });
+        assertFalse(referenceResponse.isEmpty());
+        assertEquals(2, referenceResponse.size());
+        assertEquals(referencingMD.getGroupId(), referenceResponse.get(0).getGroupId());
+        assertEquals(referencingMD.getId(), referenceResponse.get(0).getArtifactId());
+        assertEquals(referencingMD.getVersion(), referenceResponse.get(0).getVersion());
+
+        // Get INBOUND references via globalId
+        referenceResponse = given()
+                .when()
+                .pathParam("globalId", referencedMD.getGlobalId())
+                .queryParam("refType", ReferenceType.INBOUND)
+                .get("/registry/v2/ids/globalIds/{globalId}/references")
+                .then()
+                .statusCode(HTTP_OK)
+                .extract().as(new TypeRef<List<ArtifactReference>>() {
+                });
+        assertFalse(referenceResponse.isEmpty());
+        assertEquals(2, referenceResponse.size());
+        assertEquals(referencingMD.getGroupId(), referenceResponse.get(0).getGroupId());
+        assertEquals(referencingMD.getId(), referenceResponse.get(0).getArtifactId());
+        assertEquals(referencingMD.getVersion(), referenceResponse.get(0).getVersion());
     }
 
     private byte[] concatContentAndReferences(byte[] contentBytes, byte[] referencesBytes) throws IOException {
@@ -2462,4 +2482,290 @@ public class GroupsResourceTest extends AbstractResourceTestBase {
         outputStream.write(referencesBytes);
         return outputStream.toByteArray();
     }
+    
+    @Test
+    public void testArtifactComments() throws Exception {
+        String artifactId = "testArtifactComments/EmptyAPI";
+        String artifactContent = resourceToString("openapi-empty.json");
+
+        // Create OpenAPI artifact
+        createArtifact(GROUP, artifactId, ArtifactType.OPENAPI, artifactContent);
+
+        // Get comments for the artifact (should be none)
+        List<Comment> comments = given()
+                .when()
+                .pathParam("groupId", GROUP)
+                .pathParam("artifactId", artifactId)
+                .get("/registry/v2/groups/{groupId}/artifacts/{artifactId}/versions/latest/comments")
+                .then()
+                .statusCode(HTTP_OK)
+                .extract().as(new TypeRef<List<Comment>>() {
+                });
+        assertEquals(0, comments.size());
+        
+        // Create a new comment
+        NewComment nc = NewComment.builder().value("COMMENT_1").build();
+        Comment comment1 = given()
+                .when()
+                .contentType(CT_JSON)
+                .pathParam("groupId", GROUP)
+                .pathParam("artifactId", artifactId)
+                .body(nc)
+                .post("/registry/v2/groups/{groupId}/artifacts/{artifactId}/versions/latest/comments")
+                .then()
+                .statusCode(HTTP_OK)
+                .extract().as(Comment.class);
+        assertNotNull(comment1);
+        assertNotNull(comment1.getCommentId());
+        assertNotNull(comment1.getValue());
+        assertNotNull(comment1.getCreatedOn());
+        assertEquals("COMMENT_1", comment1.getValue());
+        
+        // Create another new comment
+        nc = NewComment.builder().value("COMMENT_2").build();
+        Comment comment2 = given()
+                .when()
+                .contentType(CT_JSON)
+                .pathParam("groupId", GROUP)
+                .pathParam("artifactId", artifactId)
+                .body(nc)
+                .post("/registry/v2/groups/{groupId}/artifacts/{artifactId}/versions/latest/comments")
+                .then()
+                .statusCode(HTTP_OK)
+                .extract().as(Comment.class);
+        assertNotNull(comment2);
+        assertNotNull(comment2.getCommentId());
+        assertNotNull(comment2.getValue());
+        assertNotNull(comment2.getCreatedOn());
+        assertEquals("COMMENT_2", comment2.getValue());
+        
+        // Get the list of comments (should have 2)
+        comments = given()
+                .when()
+                .pathParam("groupId", GROUP)
+                .pathParam("artifactId", artifactId)
+                .get("/registry/v2/groups/{groupId}/artifacts/{artifactId}/versions/latest/comments")
+                .then()
+                .statusCode(HTTP_OK)
+                .extract().as(new TypeRef<List<Comment>>() {
+                });
+        assertEquals(2, comments.size());
+        assertEquals("COMMENT_2", comments.get(0).getValue());
+        assertEquals("COMMENT_1", comments.get(1).getValue());
+
+        // Update a comment
+        nc = NewComment.builder().value("COMMENT_2_UPDATED").build();
+        given()
+                .when()
+                .contentType(CT_JSON)
+                .pathParam("groupId", GROUP)
+                .pathParam("artifactId", artifactId)
+                .pathParam("commentId", comment2.getCommentId())
+                .body(nc)
+                .put("/registry/v2/groups/{groupId}/artifacts/{artifactId}/versions/latest/comments/{commentId}")
+                .then()
+                .statusCode(HTTP_NO_CONTENT);
+
+        // Get the list of comments (should have 2)
+        comments = given()
+                .when()
+                .pathParam("groupId", GROUP)
+                .pathParam("artifactId", artifactId)
+                .get("/registry/v2/groups/{groupId}/artifacts/{artifactId}/versions/latest/comments")
+                .then()
+                .statusCode(HTTP_OK)
+                .extract().as(new TypeRef<List<Comment>>() {
+                });
+        assertEquals(2, comments.size());
+        assertEquals("COMMENT_2_UPDATED", comments.get(0).getValue());
+        assertEquals("COMMENT_1", comments.get(1).getValue());
+
+        // Delete a comment
+        given()
+                .when()
+                .pathParam("groupId", GROUP)
+                .pathParam("artifactId", artifactId)
+                .pathParam("commentId", comment2.getCommentId())
+                .delete("/registry/v2/groups/{groupId}/artifacts/{artifactId}/versions/latest/comments/{commentId}")
+                .then()
+                .statusCode(HTTP_NO_CONTENT);
+
+        // Get the list of comments (should have only 1)
+        comments = given()
+                .when()
+                .pathParam("groupId", GROUP)
+                .pathParam("artifactId", artifactId)
+                .get("/registry/v2/groups/{groupId}/artifacts/{artifactId}/versions/latest/comments")
+                .then()
+                .statusCode(HTTP_OK)
+                .extract().as(new TypeRef<List<Comment>>() {
+                });
+        assertEquals(1, comments.size());
+        assertEquals("COMMENT_1", comments.get(0).getValue());
+    }
+
+    @Test
+    public void testCreateArtifactIntegrityRuleViolation() throws Exception {
+        String artifactContent = resourceToString("jsonschema-valid.json");
+        String artifactId = "testCreateArtifact/IntegrityRuleViolation";
+        createArtifact(GROUP, artifactId, ArtifactType.JSON, artifactContent);
+
+        // Enable the Integrity rule for the artifact
+        Rule rule = new Rule();
+        rule.setType(RuleType.INTEGRITY);
+        rule.setConfig("FULL");
+        given()
+                .when()
+                .contentType(CT_JSON)
+                .pathParam("groupId", GROUP)
+                .body(rule)
+                .pathParam("artifactId", artifactId)
+                .post("/registry/v2/groups/{groupId}/artifacts/{artifactId}/rules")
+                .then()
+                .statusCode(204)
+                .body(anything());
+
+        // Verify the rule was added
+        TestUtils.retry(() -> {
+            given()
+                    .when()
+                    .pathParam("groupId", GROUP)
+                    .pathParam("artifactId", artifactId)
+                    .get("/registry/v2/groups/{groupId}/artifacts/{artifactId}/rules/INTEGRITY")
+                    .then()
+                    .statusCode(200)
+                    .contentType(ContentType.JSON)
+                    .body("type", equalTo("INTEGRITY"))
+                    .body("config", equalTo("FULL"));
+        });
+
+        // Now try registering an artifact with a valid reference
+        InputStream data = new ByteArrayInputStream(artifactContent.getBytes(StandardCharsets.UTF_8));
+        List<ArtifactReference> references = new ArrayList<>();
+        references.add(ArtifactReference.builder()
+                .groupId(GROUP)
+                .artifactId(artifactId)
+                .version("1")
+                .name("other.json#/defs/Foo")
+                .build());
+        clientV2.updateArtifact(GROUP, artifactId, "2", null, null, data, references);
+
+        // Now try registering an artifact with an INVALID reference
+        data = new ByteArrayInputStream(artifactContent.getBytes(StandardCharsets.UTF_8));
+        references = new ArrayList<>();
+        references.add(ArtifactReference.builder()
+                .groupId(GROUP)
+                .artifactId("ArtifactThatDoesNotExist")
+                .version("1")
+                .name("other.json#/defs/Foo")
+                .build());
+        final InputStream dataf_1 = data;
+        final List<ArtifactReference> referencesf_1 = references;
+        Assertions.assertThrows(RuleViolationException.class, () -> {
+            clientV2.updateArtifact(GROUP, artifactId, "2", null, null, dataf_1, referencesf_1);
+        });
+
+        // Now try registering an artifact with both a valid and invalid ref
+        data = new ByteArrayInputStream(artifactContent.getBytes(StandardCharsets.UTF_8));
+        references = new ArrayList<>();
+        // valid ref
+        references.add(ArtifactReference.builder()
+                .groupId(GROUP)
+                .artifactId(artifactId)
+                .version("1")
+                .name("other.json#/defs/Foo")
+                .build());
+        // invalid ref
+        references.add(ArtifactReference.builder()
+                .groupId(GROUP)
+                .artifactId("ArtifactThatDoesNotExist")
+                .version("1")
+                .name("other.json#/defs/Bar")
+                .build());
+        final InputStream dataf_2 = data;
+        final List<ArtifactReference> referencesf_2 = references;
+        Assertions.assertThrows(RuleViolationException.class, () -> {
+            clientV2.updateArtifact(GROUP, artifactId, "2", null, null, dataf_2, referencesf_2);
+        });
+
+        // Now try registering an artifact with a duplicate ref
+        data = new ByteArrayInputStream(artifactContent.getBytes(StandardCharsets.UTF_8));
+        references = new ArrayList<>();
+        // valid ref
+        references.add(ArtifactReference.builder()
+                .groupId(GROUP)
+                .artifactId(artifactId)
+                .version("1")
+                .name("other.json#/defs/Foo")
+                .build());
+        // duplicate ref
+        references.add(ArtifactReference.builder()
+                .groupId(GROUP)
+                .artifactId(artifactId)
+                .version("1")
+                .name("other.json#/defs/Foo")
+                .build());
+        final InputStream dataf_3 = data;
+        final List<ArtifactReference> referencesf_3 = references;
+        Assertions.assertThrows(RuleViolationException.class, () -> {
+            clientV2.updateArtifact(GROUP, artifactId, "2", null, null, dataf_3, referencesf_3);
+        });
+
+    }
+
+
+    @Test
+    public void testGetArtifactVersionWithReferences() throws Exception {
+        String referencedTypesContent = resourceToString("referenced-types.json");
+        String withExternalRefContent = resourceToString("openapi-with-external-ref.json");
+
+        // Create the artifact containing a type to be referenced
+        createArtifact(GROUP, "testGetArtifactVersionWithReferences/ReferencedTypes", ArtifactType.OPENAPI, referencedTypesContent);
+
+        // Create the artifact that references the type
+        List<ArtifactReference> refs = Collections.singletonList(
+                ArtifactReference.builder()
+                .name("./referenced-types.json#/components/schemas/Widget")
+                .groupId(GROUP)
+                .artifactId("testGetArtifactVersionWithReferences/ReferencedTypes")
+                .version("1")
+                .build());
+        createArtifactWithReferences(GROUP, "testGetArtifactVersionWithReferences/WithExternalRef", ArtifactType.OPENAPI, withExternalRefContent, refs);
+        
+        // Get the content of the artifact preserving external references
+        given()
+        .when()
+            .pathParam("groupId", GROUP)
+            .pathParam("artifactId", "testGetArtifactVersionWithReferences/WithExternalRef")
+        .get("/registry/v2/groups/{groupId}/artifacts/{artifactId}")
+        .then()
+            .statusCode(200)
+            .body("openapi", equalTo("3.0.2"))
+            .body("paths.widgets.get.responses.200.content.json.schema.items.$ref", equalTo("./referenced-types.json#/components/schemas/Widget"));
+        
+        // Get the content of the artifact rewriting external references
+        given()
+        .when()
+            .pathParam("groupId", GROUP)
+            .pathParam("artifactId", "testGetArtifactVersionWithReferences/WithExternalRef")
+            .queryParam("references", "REWRITE")
+        .get("/registry/v2/groups/{groupId}/artifacts/{artifactId}")
+        .then()
+            .statusCode(200)
+            .body("openapi", equalTo("3.0.2"))
+            .body("paths.widgets.get.responses.200.content.json.schema.items.$ref", endsWith("/apis/registry/v2/groups/GroupsResourceTest/artifacts/testGetArtifactVersionWithReferences%2FReferencedTypes/versions/1?references=REWRITE#/components/schemas/Widget"));
+        
+        // Get the content of the artifact inlining/dereferencing external references
+        given()
+        .when()
+            .pathParam("groupId", GROUP)
+            .pathParam("artifactId", "testGetArtifactVersionWithReferences/WithExternalRef")
+            .queryParam("references", "DEREFERENCE")
+        .get("/registry/v2/groups/{groupId}/artifacts/{artifactId}")
+        .then()
+            .statusCode(200)
+            .body("openapi", equalTo("3.0.2"))
+            .body("paths.widgets.get.responses.200.content.json.schema.items.$ref", equalTo("#/components/schemas/Widget"));
+    }
+
 }

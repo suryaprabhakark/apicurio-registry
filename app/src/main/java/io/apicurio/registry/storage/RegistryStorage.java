@@ -17,21 +17,27 @@
 
 package io.apicurio.registry.storage;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+
 import io.apicurio.common.apps.config.DynamicConfigPropertyDto;
 import io.apicurio.common.apps.config.DynamicConfigStorage;
+import io.apicurio.common.apps.multitenancy.TenantContext;
 import io.apicurio.registry.content.ContentHandle;
-import io.apicurio.registry.mt.TenantContext;
 import io.apicurio.registry.storage.dto.ArtifactMetaDataDto;
 import io.apicurio.registry.storage.dto.ArtifactOwnerDto;
 import io.apicurio.registry.storage.dto.ArtifactReferenceDto;
 import io.apicurio.registry.storage.dto.ArtifactSearchResultsDto;
 import io.apicurio.registry.storage.dto.ArtifactVersionMetaDataDto;
+import io.apicurio.registry.storage.dto.CommentDto;
 import io.apicurio.registry.storage.dto.ContentWrapperDto;
 import io.apicurio.registry.storage.dto.DownloadContextDto;
 import io.apicurio.registry.storage.dto.EditableArtifactMetaDataDto;
 import io.apicurio.registry.storage.dto.GroupMetaDataDto;
 import io.apicurio.registry.storage.dto.GroupSearchResultsDto;
-import io.apicurio.registry.storage.dto.LogConfigurationDto;
 import io.apicurio.registry.storage.dto.OrderBy;
 import io.apicurio.registry.storage.dto.OrderDirection;
 import io.apicurio.registry.storage.dto.RoleMappingDto;
@@ -43,12 +49,6 @@ import io.apicurio.registry.storage.impexp.EntityInputStream;
 import io.apicurio.registry.types.ArtifactState;
 import io.apicurio.registry.types.RuleType;
 import io.apicurio.registry.utils.impexp.Entity;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Function;
 
 /**
  * The artifactStore layer for the registry.
@@ -568,37 +568,6 @@ public interface RegistryStorage extends DynamicConfigStorage {
     void deleteGlobalRule(RuleType rule) throws RuleNotFoundException, RegistryStorageException;
 
     /**
-     * Returns the log configuration persisted in the storage for the given logger
-     *
-     * @param logger
-     * @throws RegistryStorageException
-     */
-    LogConfigurationDto getLogConfiguration(String logger) throws RegistryStorageException, LogConfigurationNotFoundException;
-
-    /**
-     * Persists the given log configuration
-     *
-     * @param logConfiguration
-     * @throws RegistryStorageException
-     */
-    void setLogConfiguration(LogConfigurationDto logConfiguration) throws RegistryStorageException;
-
-    /**
-     * Removes the persisted log configuration for the given logger
-     *
-     * @param logger
-     * @throws RegistryStorageException
-     */
-    void removeLogConfiguration(String logger) throws RegistryStorageException, LogConfigurationNotFoundException;
-
-    /**
-     * Returns the list of log configuration persisted in the storage
-     *
-     * @throws RegistryStorageException
-     */
-    List<LogConfigurationDto> listLogConfigurations() throws RegistryStorageException;
-
-    /**
      * Creates a new empty group and stores it's metadata. When creating an artifact the group is automatically created in it does not exist.
      *
      * @param group
@@ -813,6 +782,14 @@ public interface RegistryStorage extends DynamicConfigStorage {
     /**
      * @param groupId
      * @param artifactId
+     * @param version
+     * @return the list of inbound references to the given artifact version
+     */
+    List<ArtifactReferenceDto> getInboundArtifactReferences(String groupId, String artifactId, String version);
+
+    /**
+     * @param groupId
+     * @param artifactId
      * @return true if an artifact version exists with the coordinates passed as parameters
      * @throws RegistryStorageException
      */
@@ -836,4 +813,41 @@ public interface RegistryStorage extends DynamicConfigStorage {
          */
         SKIP_DISABLED_LATEST
     }
+
+    /**
+     * Creates a new comment for an artifact version.
+     * @param groupId
+     * @param artifactId
+     * @param version
+     * @param value
+     */
+    CommentDto createArtifactVersionComment(String groupId, String artifactId, String version, String value);
+
+    /**
+     * Deletes a single comment for an artifact version.
+     * @param groupId
+     * @param artifactId
+     * @param version
+     * @param commentId
+     */
+    void deleteArtifactVersionComment(String groupId, String artifactId, String version, String commentId);
+
+    /**
+     * Returns all comments for the given artifact version.
+     * @param groupId
+     * @param artifactId
+     * @param version
+     */
+    List<CommentDto> getArtifactVersionComments(String groupId, String artifactId, String version);
+
+    /**
+     * Updates a single comment.
+     * @param groupId
+     * @param artifactId
+     * @param version
+     * @param commentId
+     * @param value
+     */
+    void updateArtifactVersionComment(String groupId, String artifactId, String version, String commentId, String value);
+
 }

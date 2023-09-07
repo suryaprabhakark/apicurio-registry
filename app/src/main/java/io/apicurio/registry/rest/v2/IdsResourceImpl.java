@@ -25,25 +25,24 @@ import io.apicurio.registry.metrics.health.liveness.ResponseErrorLivenessCheck;
 import io.apicurio.registry.metrics.health.readiness.ResponseTimeoutReadinessCheck;
 import io.apicurio.registry.rest.HeadersHack;
 import io.apicurio.registry.rest.v2.beans.ArtifactReference;
+import io.apicurio.registry.rest.v2.beans.HandleReferencesType;
 import io.apicurio.registry.rest.v2.shared.CommonResourceOperations;
 import io.apicurio.registry.storage.ArtifactNotFoundException;
-import io.apicurio.registry.storage.RegistryStorage;
 import io.apicurio.registry.storage.dto.ArtifactMetaDataDto;
 import io.apicurio.registry.storage.dto.ContentWrapperDto;
 import io.apicurio.registry.storage.dto.StoredArtifactDto;
 import io.apicurio.registry.types.ArtifactMediaTypes;
 import io.apicurio.registry.types.ArtifactState;
-import io.apicurio.registry.types.Current;
-import io.apicurio.registry.types.provider.ArtifactTypeUtilProviderFactory;
+import io.apicurio.registry.types.ReferenceType;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.interceptor.Interceptors;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
 
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import javax.enterprise.context.ApplicationScoped;
-import javax.inject.Inject;
-import javax.interceptor.Interceptors;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 
 /**
  * @author eric.wittmann@gmail.com
@@ -51,14 +50,7 @@ import javax.ws.rs.core.Response;
 @ApplicationScoped
 @Interceptors({ResponseErrorLivenessCheck.class, ResponseTimeoutReadinessCheck.class})
 @Logged
-public class IdsResourceImpl implements IdsResource {
-
-    @Inject
-    @Current
-    RegistryStorage storage;
-
-    @Inject
-    ArtifactTypeUtilProviderFactory factory;
+public class IdsResourceImpl extends AbstractResourceImpl implements IdsResource {
 
     @Inject
     CommonResourceOperations common;
@@ -79,18 +71,18 @@ public class IdsResourceImpl implements IdsResource {
     }
 
     /**
-     * @see io.apicurio.registry.rest.v2.IdsResource#getContentByGlobalId(long, java.lang.Boolean)
+     * @see io.apicurio.registry.rest.v2.IdsResource#getContentByGlobalId(long, io.apicurio.registry.rest.v2.beans.HandleReferencesType)
      */
     @Override
     @Authorized(style = AuthorizedStyle.GlobalId, level = AuthorizedLevel.Read)
-    public Response getContentByGlobalId(long globalId, Boolean dereference) {
+    public Response getContentByGlobalId(long globalId, HandleReferencesType references) {
         ArtifactMetaDataDto metaData = storage.getArtifactMetaData(globalId);
         if (ArtifactState.DISABLED.equals(metaData.getState())) {
             throw new ArtifactNotFoundException(null, String.valueOf(globalId));
         }
 
-        if (dereference == null) {
-            dereference = Boolean.FALSE;
+        if (references == null) {
+            references = HandleReferencesType.PRESERVE;
         }
 
         StoredArtifactDto artifact = storage.getArtifactVersion(globalId);
@@ -98,12 +90,7 @@ public class IdsResourceImpl implements IdsResource {
         MediaType contentType = factory.getArtifactMediaType(metaData.getType());
 
         ContentHandle contentToReturn = artifact.getContent();
-        //TODO:carnalca when dereferencing is implemented, we should return the content dereferenced here
-        /*
-        if (dereference && !artifact.getReferences().isEmpty()) {
-            contentToReturn = factory.getArtifactTypeProvider(metaData.getType()).getContentDereferencer().dereference(artifact.getContent(), storage.resolveReferences(artifact.getReferences()));
-        }
-        */
+        handleContentReferences(references, metaData.getType(), contentToReturn, artifact.getReferences());
 
         Response.ResponseBuilder builder = Response.ok(contentToReturn, contentType);
         checkIfDeprecated(metaData::getState, metaData.getId(), metaData.getVersion(), builder);
@@ -121,11 +108,17 @@ public class IdsResourceImpl implements IdsResource {
         return builder.build();
     }
 
+    /**
+     * @see io.apicurio.registry.rest.v2.IdsResource#referencesByContentHash(java.lang.String)
+     */
     @Override
     public List<ArtifactReference> referencesByContentHash(String contentHash) {
         return common.getReferencesByContentHash(contentHash);
     }
 
+    /**
+     * @see io.apicurio.registry.rest.v2.IdsResource#referencesByContentId(long)
+     */
     @Override
     public List<ArtifactReference> referencesByContentId(long contentId) {
         ContentWrapperDto artifact = storage.getArtifactByContentId(contentId);
@@ -134,11 +127,21 @@ public class IdsResourceImpl implements IdsResource {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * @see io.apicurio.registry.rest.v2.IdsResource#referencesByGlobalId(long, io.apicurio.registry.types.ReferenceType)
+     */
     @Override
-    public List<ArtifactReference> referencesByGlobalId(long globalId) {
-        StoredArtifactDto artifact = storage.getArtifactVersion(globalId);
-        return artifact.getReferences().stream()
-                .map(V2ApiUtil::referenceDtoToReference)
-                .collect(Collectors.toList());
+    public List<ArtifactReference> referencesByGlobalId(long globalId, ReferenceType refType) {
+        if (refType == ReferenceType.OUTBOUND || refType == null) {
+            StoredArtifactDto artifact = storage.getArtifactVersion(globalId);
+            return artifact.getReferences().stream()
+                    .map(V2ApiUtil::referenceDtoToReference)
+                    .collect(Collectors.toList());
+        } else {
+            ArtifactMetaDataDto amd = storage.getArtifactMetaData(globalId);
+            return storage.getInboundArtifactReferences(amd.getGroupId(), amd.getId(), amd.getVersion()).stream()
+                    .map(V2ApiUtil::referenceDtoToReference)
+                    .collect(Collectors.toList());
+        }
     }
 }

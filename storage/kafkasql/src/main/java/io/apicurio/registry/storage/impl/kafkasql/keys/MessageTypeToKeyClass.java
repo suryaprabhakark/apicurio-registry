@@ -50,9 +50,6 @@ public class MessageTypeToKeyClass {
                 case GlobalRule:
                     index.put(type, GlobalRuleKey.class);
                     break;
-                case LogConfig:
-                    index.put(type, LogConfigKey.class);
-                    break;
                 case ArtifactVersion:
                     index.put(type, ArtifactVersionKey.class);
                     break;
@@ -76,6 +73,12 @@ public class MessageTypeToKeyClass {
                     break;
                 case ArtifactOwner:
                     index.put(type, ArtifactOwnerKey.class);
+                    break;
+                case CommentId:
+                    index.put(type, CommentIdKey.class);
+                    break;
+                case Comment:
+                    index.put(type, CommentKey.class);
                     break;
                 default:
                     throw new RuntimeException("[MessageTypeToKeyClass] Type not mapped: " + type);

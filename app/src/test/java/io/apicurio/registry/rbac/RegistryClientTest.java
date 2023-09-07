@@ -20,40 +20,10 @@ import io.apicurio.registry.AbstractRegistryTestBase;
 import io.apicurio.registry.AbstractResourceTestBase;
 import io.apicurio.registry.rest.client.RegistryClient;
 import io.apicurio.registry.rest.client.RegistryClientFactory;
-import io.apicurio.registry.rest.client.exception.ArtifactNotFoundException;
-import io.apicurio.registry.rest.client.exception.ConfigPropertyNotFoundException;
-import io.apicurio.registry.rest.client.exception.GroupNotFoundException;
-import io.apicurio.registry.rest.client.exception.InvalidPropertyValueException;
-import io.apicurio.registry.rest.client.exception.RateLimitedClientException;
-import io.apicurio.registry.rest.client.exception.RoleMappingAlreadyExistsException;
-import io.apicurio.registry.rest.client.exception.RoleMappingNotFoundException;
-import io.apicurio.registry.rest.v2.beans.ArtifactContent;
-import io.apicurio.registry.rest.v2.beans.ArtifactMetaData;
-import io.apicurio.registry.rest.v2.beans.ArtifactReference;
-import io.apicurio.registry.rest.v2.beans.ArtifactSearchResults;
-import io.apicurio.registry.rest.v2.beans.ConfigurationProperty;
-import io.apicurio.registry.rest.v2.beans.EditableMetaData;
-import io.apicurio.registry.rest.v2.beans.GroupMetaData;
-import io.apicurio.registry.rest.v2.beans.GroupSearchResults;
-import io.apicurio.registry.rest.v2.beans.IfExists;
-import io.apicurio.registry.rest.v2.beans.LogConfiguration;
-import io.apicurio.registry.rest.v2.beans.NamedLogConfiguration;
-import io.apicurio.registry.rest.v2.beans.RoleMapping;
-import io.apicurio.registry.rest.v2.beans.Rule;
-import io.apicurio.registry.rest.v2.beans.SearchedArtifact;
-import io.apicurio.registry.rest.v2.beans.SearchedGroup;
-import io.apicurio.registry.rest.v2.beans.SortBy;
-import io.apicurio.registry.rest.v2.beans.SortOrder;
-import io.apicurio.registry.rest.v2.beans.UpdateState;
-import io.apicurio.registry.rest.v2.beans.VersionMetaData;
-import io.apicurio.registry.rest.v2.beans.VersionSearchResults;
+import io.apicurio.registry.rest.client.exception.*;
+import io.apicurio.registry.rest.v2.beans.*;
 import io.apicurio.registry.storage.impl.sql.SqlUtil;
-import io.apicurio.registry.types.ArtifactState;
-import io.apicurio.registry.types.ArtifactType;
-import io.apicurio.registry.types.ContentTypes;
-import io.apicurio.registry.types.LogLevel;
-import io.apicurio.registry.types.RoleType;
-import io.apicurio.registry.types.RuleType;
+import io.apicurio.registry.types.*;
 import io.apicurio.registry.utils.IoUtil;
 import io.apicurio.registry.utils.tests.ApicurioTestTags;
 import io.apicurio.registry.utils.tests.ApplicationRbacEnabledProfile;
@@ -61,6 +31,7 @@ import io.apicurio.registry.utils.tests.TestUtils;
 import io.apicurio.registry.utils.tests.TooManyRequestsMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
+import jakarta.inject.Inject;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.IOUtils;
 import org.jetbrains.annotations.NotNull;
@@ -74,18 +45,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
-import javax.inject.Inject;
 
 import static io.apicurio.registry.utils.tests.TestUtils.retry;
 import static org.junit.jupiter.api.Assertions.*;
@@ -156,7 +119,6 @@ public class RegistryClientTest extends AbstractResourceTestBase {
         //Execution
         final InputStream stream = IoUtil.toStream(ARTIFACT_CONTENT.getBytes(StandardCharsets.UTF_8));
         final ArtifactMetaData created = clientV2.createArtifact(groupId, artifactId, version, ArtifactType.JSON, IfExists.FAIL, false, name, description, stream);
-        waitForArtifact(groupId, artifactId);
 
         //Assertions
         assertNotNull(created);
@@ -222,7 +184,6 @@ public class RegistryClientTest extends AbstractResourceTestBase {
         //Execution
         final InputStream stream = IoUtil.toStream(ARTIFACT_OPENAPI_YAML_CONTENT.getBytes(StandardCharsets.UTF_8));
         final ArtifactMetaData created = clientV2.createArtifact(groupId, artifactId, version, ArtifactType.OPENAPI, IfExists.FAIL, false, name, description, ContentTypes.APPLICATION_YAML, null, null, stream);
-        waitForArtifact(groupId, artifactId);
 
         //Assertions
         assertNotNull(created);
@@ -250,7 +211,6 @@ public class RegistryClientTest extends AbstractResourceTestBase {
         //Execution
         final InputStream stream = IoUtil.toStream(UPDATED_CONTENT.getBytes(StandardCharsets.UTF_8));
         VersionMetaData versionMetaData = clientV2.createArtifactVersion(groupId, artifactId, version, name, description, stream);
-        waitForVersion(groupId, artifactId, 2);
 
         ArtifactMetaData amd = clientV2.getArtifactMetaData(groupId, artifactId);
 
@@ -283,7 +243,6 @@ public class RegistryClientTest extends AbstractResourceTestBase {
         //Execution
         final InputStream stream = IoUtil.toStream(UPDATED_OPENAPI_YAML_CONTENT.getBytes(StandardCharsets.UTF_8));
         VersionMetaData versionMetaData = clientV2.createArtifactVersion(groupId, artifactId, version, name, description, ContentTypes.APPLICATION_YAML, stream);
-        waitForVersion(groupId, artifactId, 2);
 
         ArtifactMetaData amd = clientV2.getArtifactMetaData(groupId, artifactId);
 
@@ -313,7 +272,6 @@ public class RegistryClientTest extends AbstractResourceTestBase {
             InputStream stream = IoUtil.toStream(ARTIFACT_CONTENT.getBytes(StandardCharsets.UTF_8));
             ArtifactMetaData amd = clientV2.createArtifact(groupId, artifactId, ArtifactType.JSON, stream);
             Assertions.assertNotNull(amd);
-            waitForArtifact(groupId, artifactId);
 
             EditableMetaData emd = new EditableMetaData();
             emd.setName("testAsyncCRUD");
@@ -388,10 +346,7 @@ public class RegistryClientTest extends AbstractResourceTestBase {
                         + "\",\"fields\":[{\"name\":\"foo\",\"type\":\"string\"}]}")
                         .getBytes(StandardCharsets.UTF_8));
 
-        ArtifactMetaData amd = clientV2.createArtifact(groupId, artifactId, ArtifactType.JSON, artifactData);
-        long id = amd.getGlobalId();
-
-        this.waitForGlobalId(id);
+        clientV2.createArtifact(groupId, artifactId, ArtifactType.JSON, artifactData);
 
         //Execution
         ArtifactSearchResults results = clientV2.searchArtifacts(null, name, null, null, null, SortBy.name, SortOrder.asc, 0, 10);
@@ -420,15 +375,12 @@ public class RegistryClientTest extends AbstractResourceTestBase {
                 .getBytes(StandardCharsets.UTF_8);
 
         ArtifactMetaData amd = clientV2.createArtifact(groupId, artifactId, ArtifactType.JSON, IoUtil.toStream(content));
-        long id = amd.getGlobalId();
-        this.waitForGlobalId(id);
         LOGGER.info("created " + amd.getId() + " - " + amd.getCreatedOn());
 
         Thread.sleep(1500);
 
         String artifactId2 = UUID.randomUUID().toString();
         ArtifactMetaData amd2 = clientV2.createArtifact(groupId, artifactId2, ArtifactType.JSON, IoUtil.toStream(content));
-        this.waitForGlobalId(amd2.getGlobalId());
         LOGGER.info("created " + amd2.getId() + " - " + amd2.getCreatedOn());
 
         //Execution
@@ -464,15 +416,12 @@ public class RegistryClientTest extends AbstractResourceTestBase {
                 .getBytes(StandardCharsets.UTF_8);
 
         ArtifactMetaData amd = clientV2.createArtifact(groupId, artifactId, ArtifactType.JSON, IoUtil.toStream(content));
-        long id = amd.getGlobalId();
-        this.waitForGlobalId(id);
         LOGGER.info("created " + amd.getId() + " - " + amd.getCreatedOn());
 
         Thread.sleep(1500);
 
         String artifactId2 = UUID.randomUUID().toString();
         ArtifactMetaData amd2 = clientV2.createArtifact(groupId, artifactId2, ArtifactType.JSON, IoUtil.toStream(content));
-        this.waitForGlobalId(amd2.getGlobalId());
         LOGGER.info("created " + amd2.getId() + " - " + amd2.getCreatedOn());
 
         ArtifactSearchResults results = clientV2.searchArtifacts(null, null, null, null, null, amd.getGlobalId(), null, SortBy.name, SortOrder.asc, 0, 10);
@@ -505,13 +454,9 @@ public class RegistryClientTest extends AbstractResourceTestBase {
                 ("{\"type\":\"record\",\"title\":\"" + name + "\",\"fields\":[{\"name\":\"foo\",\"type\":\"string\"}]}")
                         .getBytes(StandardCharsets.UTF_8));
 
-        ArtifactMetaData amd = clientV2.createArtifact(groupId, artifactId, ArtifactType.JSON, artifactData);
-        long id1 = amd.getGlobalId();
-        this.waitForGlobalId(id1);
+        clientV2.createArtifact(groupId, artifactId, ArtifactType.JSON, artifactData);
         artifactData.reset(); // a must between usage!!
-        VersionMetaData vmd = clientV2.createArtifactVersion(groupId, artifactId, null, artifactData);
-        long id2 = vmd.getGlobalId();
-        this.waitForGlobalId(id2);
+        clientV2.createArtifactVersion(groupId, artifactId, null, artifactData);
 
 
         //Execution
@@ -541,7 +486,6 @@ public class RegistryClientTest extends AbstractResourceTestBase {
                             .getBytes(StandardCharsets.UTF_8));
 
             ArtifactMetaData md = clientV2.createArtifact(groupId, artifactId, ArtifactType.JSON, artifactData);
-            waitForArtifact(groupId, artifactId);
             artifactIds.add(artifactId);
             versions.add(md.getVersion());
         }
@@ -562,9 +506,7 @@ public class RegistryClientTest extends AbstractResourceTestBase {
         UpdateState us = new UpdateState();
         us.setState(ArtifactState.DISABLED);
         clientV2.updateArtifactState(groupId, artifactIds.get(0), us);
-        waitForVersionState(groupId, artifactIds.get(0), versions.get(0), ArtifactState.DISABLED);
         clientV2.updateArtifactState(groupId, artifactIds.get(3), us);
-        waitForVersionState(groupId, artifactIds.get(3), versions.get(0), ArtifactState.DISABLED);
 
         //Execution
         // Check the search results still include the DISABLED artifacts
@@ -598,16 +540,13 @@ public class RegistryClientTest extends AbstractResourceTestBase {
                         .getBytes(StandardCharsets.UTF_8));
 
         clientV2.createArtifact(groupId, artifactId, ArtifactType.JSON, artifactData);
-        waitForArtifact(groupId, artifactId);
         artifactData.reset();
 
         clientV2.createArtifactVersion(groupId, artifactId, null, artifactData);
-        waitForVersion(groupId, artifactId, 2);
 
         artifactData.reset();
 
         clientV2.createArtifactVersion(groupId, artifactId, null, artifactData);
-        waitForVersion(groupId, artifactId, 3);
 
         //Execution
         VersionSearchResults results = clientV2.listArtifactVersions(groupId, artifactId, 0, 5);
@@ -624,9 +563,7 @@ public class RegistryClientTest extends AbstractResourceTestBase {
         UpdateState us = new UpdateState();
         us.setState(ArtifactState.DISABLED);
         clientV2.updateArtifactVersionState(groupId, artifactId, "1", us);
-        waitForVersionState(groupId, artifactId, "1", ArtifactState.DISABLED);
         clientV2.updateArtifactVersionState(groupId, artifactId, "3", us);
-        waitForVersionState(groupId, artifactId, "3", ArtifactState.DISABLED);
 
         //Execution
         // Check that the search results still include the DISABLED versions
@@ -655,7 +592,6 @@ public class RegistryClientTest extends AbstractResourceTestBase {
         try {
             InputStream stream = IoUtil.toStream("{\"name\":\"redhat\"}".getBytes(StandardCharsets.UTF_8));
             clientV2.createArtifact(groupId, artifactId, ArtifactType.JSON, stream);
-            this.waitForArtifact(groupId, artifactId);
             EditableMetaData emd = new EditableMetaData();
             emd.setName("testLabels");
 
@@ -694,8 +630,6 @@ public class RegistryClientTest extends AbstractResourceTestBase {
         try {
             InputStream stream = IoUtil.toStream("{\"name\":\"redhat\"}".getBytes(StandardCharsets.UTF_8));
             clientV2.createArtifact(groupId, artifactId, ArtifactType.JSON, stream);
-
-            this.waitForArtifact(groupId, artifactId);
 
             EditableMetaData emd = new EditableMetaData();
             emd.setName("testProperties");
@@ -742,25 +676,19 @@ public class RegistryClientTest extends AbstractResourceTestBase {
                     ("{\"type\":\"record\",\"title\":\"" + firstName + "\",\"fields\":[{\"name\":\"foo\",\"type\":\"string\"}]}")
                             .getBytes(StandardCharsets.UTF_8));
 
-            ArtifactMetaData amd = clientV2.createArtifact(groupId, firstArtifactId, ArtifactType.JSON, artifactData);
-            long id = amd.getGlobalId();
-            this.waitForGlobalId(id);
+            clientV2.createArtifact(groupId, firstArtifactId, ArtifactType.JSON, artifactData);
             // Create artifact 2
             String secondName = "bbbTestorder" + ThreadLocalRandom.current().nextInt(1000000);
             InputStream secondData = IoUtil.toStream(
                     ("{\"type\":\"record\",\"title\":\"" + secondName + "\",\"fields\":[{\"name\":\"foo\",\"type\":\"string\"}]}")
                             .getBytes(StandardCharsets.UTF_8));
 
-            ArtifactMetaData secondCs = clientV2.createArtifact(groupId, secondArtifactId, ArtifactType.JSON, secondData);
-            long secondId = secondCs.getGlobalId();
-            this.waitForGlobalId(secondId);
+            clientV2.createArtifact(groupId, secondArtifactId, ArtifactType.JSON, secondData);
             // Create artifact 3
             InputStream thirdData = IoUtil.toStream(
                     ("{\"openapi\":\"3.0.2\",\"info\":{\"description\":\"testorder\"}}")
                             .getBytes(StandardCharsets.UTF_8));
-            ArtifactMetaData thirdCs = clientV2.createArtifact(groupId, thirdArtifactId, ArtifactType.OPENAPI, thirdData);
-            long thirdId = thirdCs.getGlobalId();
-            this.waitForGlobalId(thirdId);
+            clientV2.createArtifact(groupId, thirdArtifactId, ArtifactType.OPENAPI, thirdData);
 
             retry(() -> {
                 ArtifactMetaData artifactMetaData = clientV2.getArtifactMetaData(groupId, thirdArtifactId);
@@ -997,7 +925,7 @@ public class RegistryClientTest extends AbstractResourceTestBase {
         artifactReference.setName("com.example.common.ItemId");
 
         final String secondArtifactId = generateArtifactId();
-        final Integer globalId = createArtifactWithReferences(groupId, secondArtifactId, ArtifactType.AVRO, SCHEMA_WITH_REFERENCE, List.of(artifactReference));
+        createArtifactWithReferences(groupId, secondArtifactId, ArtifactType.AVRO, SCHEMA_WITH_REFERENCE, List.of(artifactReference));
 
         //Create rule
         createArtifactRule(groupId, secondArtifactId, RuleType.COMPATIBILITY, "BACKWARD");
@@ -1240,23 +1168,6 @@ public class RegistryClientTest extends AbstractResourceTestBase {
     }
 
     @Test
-    public void smokeLogLevels() throws Exception {
-        final String logger = "smokeLogLevels";
-        /*final List<NamedLogConfiguration> namedLogConfigurations = */
-        clientV2.listLogConfigurations();
-
-        setLogLevel(logger, LogLevel.DEBUG);
-        final NamedLogConfiguration logConfiguration = clientV2.getLogConfiguration(logger);
-        assertEquals(LogLevel.DEBUG, logConfiguration.getLevel());
-        assertEquals(logger, logConfiguration.getName());
-
-        final List<NamedLogConfiguration> logConfigurations = clientV2.listLogConfigurations();
-        assertTrue(logConfigurations.size() >= 1);
-
-        clientV2.removeLogConfiguration(logger);
-    }
-
-    @Test
     @DisabledIfEnvironmentVariable(named = AbstractRegistryTestBase.CURRENT_ENV, matches = AbstractRegistryTestBase.CURRENT_ENV_MAS_REGEX)
     public void testDefaultGroup() throws Exception {
         String nullDefaultGroup = null;
@@ -1331,8 +1242,6 @@ public class RegistryClientTest extends AbstractResourceTestBase {
 
     @NotNull
     private ArtifactMetaData checkArtifact(String groupId, String artifactId, ArtifactMetaData created) throws Exception {
-        waitForArtifact(groupId, artifactId);
-
         assertNotNull(created);
         if (groupId == null || groupId.equals("default")) {
             assertNull(created.getGroupId());
@@ -1360,12 +1269,6 @@ public class RegistryClientTest extends AbstractResourceTestBase {
     private void prepareRuleTest(String groupId, String artifactId, RuleType ruleType, String ruleConfig) throws Exception {
         createArtifact(groupId, artifactId);
         createArtifactRule(groupId, artifactId, ruleType, ruleConfig);
-    }
-
-    private void setLogLevel(String log, LogLevel logLevel) {
-        final LogConfiguration logConfiguration = new LogConfiguration();
-        logConfiguration.setLevel(logLevel);
-        clientV2.setLogConfiguration(log, logConfiguration);
     }
 
     @Test
@@ -1602,8 +1505,6 @@ public class RegistryClientTest extends AbstractResourceTestBase {
         String artifactId = TestUtils.generateArtifactId();
 
         clientV2.createArtifact(groupId, artifactId, ArtifactType.AVRO, artifactContent);
-
-        this.waitForArtifact(groupId, artifactId);
 
         var meta = clientV2.getArtifactMetaData(groupId, artifactId);
 

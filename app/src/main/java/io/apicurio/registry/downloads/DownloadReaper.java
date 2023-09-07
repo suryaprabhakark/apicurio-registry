@@ -22,8 +22,8 @@ import io.quarkus.scheduler.Scheduled;
 import org.slf4j.Logger;
 
 import java.time.Instant;
-import javax.enterprise.context.ApplicationScoped;
-import javax.inject.Inject;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import static io.quarkus.scheduler.Scheduled.ConcurrentExecution.SKIP;
 
@@ -45,10 +45,10 @@ public class DownloadReaper {
     /**
      * Minimal granularity is 1 minute.
      */
-    @Scheduled(concurrentExecution = SKIP, every = "{registry.downloads.reaper.every}")
+    @Scheduled(delay = 2, concurrentExecution = SKIP, every = "{registry.downloads.reaper.every}")
     void run() {
         try {
-            if(storage.isAlive()) {
+            if(storage.isReady()) {
                 log.debug("Running download reaper job at {}", Instant.now());
                 reap();
             } else {

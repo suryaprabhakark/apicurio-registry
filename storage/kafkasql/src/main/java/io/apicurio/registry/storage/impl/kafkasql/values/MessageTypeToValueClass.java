@@ -49,9 +49,6 @@ public class MessageTypeToValueClass {
                 case GlobalRule:
                     index.put(type, GlobalRuleValue.class);
                     break;
-                case LogConfig:
-                    index.put(type, LogConfigValue.class);
-                    break;
                 case ArtifactVersion:
                     index.put(type, ArtifactVersionValue.class);
                     break;
@@ -75,6 +72,12 @@ public class MessageTypeToValueClass {
                     break;
                 case ArtifactOwner:
                     index.put(type, ArtifactOwnerValue.class);
+                    break;
+                case CommentId:
+                    index.put(type, CommentIdValue.class);
+                    break;
+                case Comment:
+                    index.put(type, CommentValue.class);
                     break;
                 default:
                     throw new RuntimeException("[MessageTypeToValueClass] Type not mapped: " + type);

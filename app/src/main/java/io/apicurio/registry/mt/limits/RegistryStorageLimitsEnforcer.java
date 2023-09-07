@@ -31,6 +31,7 @@ import io.apicurio.registry.storage.dto.OrderBy;
 import io.apicurio.registry.storage.dto.OrderDirection;
 import io.apicurio.registry.storage.dto.SearchFilter;
 import io.apicurio.registry.types.RegistryException;
+
 import org.eclipse.microprofile.context.ThreadContext;
 
 import java.util.List;
@@ -38,8 +39,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
-import javax.enterprise.context.ApplicationScoped;
-import javax.inject.Inject;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 /**
  * Decorator of {@link RegistryStorage} that applies per-tenant limits enforcement, with this is possible to limit how many artifacts a tenant can create...
@@ -55,10 +56,10 @@ public class RegistryStorageLimitsEnforcer extends RegistryStorageDecorator {
     ThreadContext threadContext;
 
     @Inject
-    TenantLimitsService limitsService;
+    RegistryTenantLimitsService limitsService;
 
     @Inject
-    TenantLimitsConfigurationService limitsConfiguration;
+    RegistryTenantLimitsConfigurationService limitsConfiguration;
 
     /**
      * @see io.apicurio.registry.storage.decorator.RegistryStorageDecorator#isEnabled()
@@ -155,7 +156,7 @@ public class RegistryStorageLimitsEnforcer extends RegistryStorageDecorator {
     public void updateArtifactVersionMetaData(String groupId, String artifactId, String version,
             EditableArtifactMetaDataDto metaData)
             throws ArtifactNotFoundException, VersionNotFoundException, RegistryStorageException {
-
+        
         withLimitsCheck(() -> limitsService.checkMetaData(metaData))
             .execute(() -> {
                 super.updateArtifactVersionMetaData(groupId, artifactId, version, metaData);

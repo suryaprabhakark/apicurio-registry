@@ -34,23 +34,13 @@ import com.squareup.wire.schema.Rpc;
 import com.squareup.wire.schema.Schema;
 import com.squareup.wire.schema.Service;
 import com.squareup.wire.schema.Type;
-import com.squareup.wire.schema.internal.parser.EnumConstantElement;
-import com.squareup.wire.schema.internal.parser.EnumElement;
-import com.squareup.wire.schema.internal.parser.ExtensionsElement;
-import com.squareup.wire.schema.internal.parser.FieldElement;
-import com.squareup.wire.schema.internal.parser.MessageElement;
-import com.squareup.wire.schema.internal.parser.OneOfElement;
-import com.squareup.wire.schema.internal.parser.OptionElement;
-import com.squareup.wire.schema.internal.parser.ProtoFileElement;
-import com.squareup.wire.schema.internal.parser.ReservedElement;
-import com.squareup.wire.schema.internal.parser.RpcElement;
-import com.squareup.wire.schema.internal.parser.ServiceElement;
-import com.squareup.wire.schema.internal.parser.TypeElement;
+import com.squareup.wire.schema.internal.parser.*;
 import kotlin.ranges.IntRange;
 import metadata.ProtobufSchemaMetadata;
 import additionalTypes.Decimals;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -184,14 +174,33 @@ public class FileDescriptorUtils {
         Objects.requireNonNull(schemaDefinition);
         Objects.requireNonNull(protoFileName);
 
-        return FileDescriptor.buildFrom(toFileDescriptorProto(schemaDefinition, protoFileName, optionalPackageName), baseDependencies());
+        return FileDescriptor.buildFrom(toFileDescriptorProto(schemaDefinition, protoFileName, optionalPackageName, Collections.emptyMap()), baseDependencies());
+    }
+
+    public static FileDescriptor protoFileToFileDescriptor(String schemaDefinition, String protoFileName, Optional<String> optionalPackageName, Map<String, String> schemaDefs, Map<String, Descriptors.FileDescriptor> dependencies)
+            throws DescriptorValidationException {
+        Objects.requireNonNull(schemaDefinition);
+        Objects.requireNonNull(protoFileName);
+
+        final List<Descriptors.FileDescriptor> baseDependencies = Arrays.asList(baseDependencies());
+        final Set<Descriptors.FileDescriptor> joinedDependencies = new HashSet<>(baseDependencies);
+        joinedDependencies.addAll(dependencies.values());
+
+        Descriptors.FileDescriptor[] dependenciesArray = new Descriptors.FileDescriptor[joinedDependencies.size()];
+
+        return FileDescriptor.buildFrom(toFileDescriptorProto(schemaDefinition, protoFileName, optionalPackageName, schemaDefs), joinedDependencies.toArray(dependenciesArray));
     }
 
     private static FileDescriptorProto toFileDescriptorProto(String schemaDefinition, String protoFileName, Optional<String> optionalPackageName) {
+        return toFileDescriptorProto(schemaDefinition, protoFileName, optionalPackageName, Collections.emptyMap());
+    }
+
+
+    private static FileDescriptorProto toFileDescriptorProto(String schemaDefinition, String protoFileName, Optional<String> optionalPackageName, Map<String, String> deps) {
         final ProtobufSchemaLoader.ProtobufSchemaLoaderContext protobufSchemaLoaderContext;
         try {
             protobufSchemaLoaderContext =
-                    ProtobufSchemaLoader.loadSchema(optionalPackageName, protoFileName, schemaDefinition);
+                    ProtobufSchemaLoader.loadSchema(optionalPackageName, protoFileName, schemaDefinition, deps);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -236,6 +245,7 @@ public class FileDescriptorUtils {
         for (String ref : element.getImports()) {
             schema.addDependency(ref);
         }
+
         for (String ref : element.getPublicImports()) {
             boolean add = true;
             for (int i = 0; i < schema.getDependencyCount(); i++) {
@@ -901,13 +911,14 @@ public class FileDescriptorUtils {
                     descriptor.getOptions().getNoStandardDescriptorAccessor(), false);
             options.add(option);
         }
+
         return new MessageElement(DEFAULT_LOCATION, name, "", nested.build(), options.build(),
                 reserved.build(), fields.build(),
                 oneofs.stream()
                         //Ignore oneOfs with no fields (like Proto3 Optional)
                         .filter(e -> e.getValue().build().size() != 0)
                         .map(e -> toOneof(e.getKey(), e.getValue())).collect(Collectors.toList()),
-                extensions.build(), Collections.emptyList());
+                extensions.build(), Collections.emptyList(), Collections.emptyList());
     }
 
     private static OneOfElement toOneof(String name, ImmutableList.Builder<FieldElement> fields) {

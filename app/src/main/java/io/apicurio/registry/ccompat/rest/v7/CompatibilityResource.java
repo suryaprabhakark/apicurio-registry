@@ -18,19 +18,11 @@ package io.apicurio.registry.ccompat.rest.v7;
 
 import io.apicurio.registry.ccompat.dto.CompatibilityCheckResponse;
 import io.apicurio.registry.ccompat.dto.SchemaContent;
+import io.apicurio.registry.rest.Headers;
+import jakarta.validation.constraints.NotNull;
+import jakarta.ws.rs.*;
 
-import javax.validation.constraints.NotNull;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-
-import static io.apicurio.registry.ccompat.rest.ContentTypes.COMPAT_SCHEMA_REGISTRY_STABLE_LATEST;
-import static io.apicurio.registry.ccompat.rest.ContentTypes.COMPAT_SCHEMA_REGISTRY_V1;
-import static io.apicurio.registry.ccompat.rest.ContentTypes.JSON;
-import static io.apicurio.registry.ccompat.rest.ContentTypes.OCTET_STREAM;
+import static io.apicurio.registry.ccompat.rest.ContentTypes.*;
 
 /**
  * Note:
@@ -70,7 +62,7 @@ public interface CompatibilityResource {
     @Path("/subjects/{subject}/versions")
     CompatibilityCheckResponse testCompatibilityBySubjectName(
             @PathParam("subject") String subject,
-            @NotNull SchemaContent request, @QueryParam("verbose") Boolean verbose) throws Exception;
+            @NotNull SchemaContent request, @QueryParam("verbose") Boolean verbose, @HeaderParam(Headers.GROUP_ID) String groupId) throws Exception;
 
     // ----- Path: /compatibility/subjects/{subject}/versions/{version} -----
 
@@ -102,6 +94,6 @@ public interface CompatibilityResource {
     CompatibilityCheckResponse testCompatibilityByVersion(
             @PathParam("subject") String subject,
             @PathParam("version") String version,
-            @NotNull SchemaContent request, @QueryParam("verbose") Boolean verbose) throws Exception;
+            @NotNull SchemaContent request, @QueryParam("verbose") Boolean verbose, @HeaderParam(Headers.GROUP_ID) String groupId) throws Exception;
 
 }

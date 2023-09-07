@@ -18,7 +18,7 @@ package io.apicurio.registry.rest;
 
 import io.apicurio.registry.types.ArtifactState;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 import java.util.function.Supplier;
 
 /**
@@ -28,7 +28,7 @@ public interface Headers {
     String GROUP_ID = "X-Registry-GroupId";
     String ARTIFACT_ID = "X-Registry-ArtifactId";
     String VERSION = "X-Registry-Version";
-    String TENANT_ID = "X-Registry-Tenant-Id";
+    String TENANT_ID = "X-Tenant-Id";
     String ARTIFACT_TYPE = "X-Registry-ArtifactType";
     String HASH_ALGO = "X-Registry-Hash-Algorithm";
     String ARTIFACT_HASH = "X-Registry-Content-Hash";

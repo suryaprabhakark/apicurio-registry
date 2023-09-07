@@ -17,11 +17,11 @@
 package io.apicurio.registry.rbac;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-import io.apicurio.registry.utils.tests.ApicurioTestTags;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -29,13 +29,12 @@ import org.junit.jupiter.api.Test;
 import io.apicurio.registry.AbstractResourceTestBase;
 import io.apicurio.registry.rest.client.exception.RoleMappingAlreadyExistsException;
 import io.apicurio.registry.rest.client.exception.RoleMappingNotFoundException;
-import io.apicurio.registry.rest.v2.beans.LogConfiguration;
-import io.apicurio.registry.rest.v2.beans.NamedLogConfiguration;
+import io.apicurio.registry.rest.v2.beans.ArtifactTypeInfo;
 import io.apicurio.registry.rest.v2.beans.RoleMapping;
 import io.apicurio.registry.rest.v2.beans.Rule;
-import io.apicurio.registry.types.LogLevel;
 import io.apicurio.registry.types.RoleType;
 import io.apicurio.registry.types.RuleType;
+import io.apicurio.registry.utils.tests.ApicurioTestTags;
 import io.apicurio.registry.utils.tests.ApplicationRbacEnabledProfile;
 import io.apicurio.registry.utils.tests.TestUtils;
 import io.quarkus.test.junit.QuarkusTest;
@@ -124,20 +123,12 @@ public class AdminClientTest extends AbstractResourceTestBase {
     }
 
     @Test
-    public void smokeLogLevels() {
-        final String logger = "smokeLogLevels";
-        final List<NamedLogConfiguration> namedLogConfigurations = adminClientV2.listLogConfigurations();
-        assertEquals(0, namedLogConfigurations.size());
+    public void listArtifactTypes() {
+        final List<ArtifactTypeInfo> artifactTypes = adminClientV2.listArtifactTypes();
 
-        setLogLevel(logger, LogLevel.DEBUG);
-        final NamedLogConfiguration logConfiguration = adminClientV2.getLogConfiguration(logger);
-        assertEquals(LogLevel.DEBUG, logConfiguration.getLevel());
-        assertEquals(logger, logConfiguration.getName());
-
-        final List<NamedLogConfiguration> logConfigurations = adminClientV2.listLogConfigurations();
-        assertEquals(1, logConfigurations.size());
-
-        adminClientV2.removeLogConfiguration(logger);
+        assertTrue(artifactTypes.size() > 0);
+        assertTrue(artifactTypes.stream().anyMatch(t -> t.getName().equals("OPENAPI")));
+        assertFalse(artifactTypes.stream().anyMatch(t -> t.getName().equals("UNKNOWN")));
     }
 
     @Test
@@ -222,13 +213,6 @@ public class AdminClientTest extends AbstractResourceTestBase {
 
         // Clean up
         adminClientV2.deleteRoleMapping("TestUser");
-
-    }
-
-    private void setLogLevel(String log, LogLevel logLevel) {
-        final LogConfiguration logConfiguration = new LogConfiguration();
-        logConfiguration.setLevel(logLevel);
-        adminClientV2.setLogConfiguration(log, logConfiguration);
     }
 
     @Override

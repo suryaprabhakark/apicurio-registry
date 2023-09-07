@@ -16,7 +16,21 @@
 
 package io.apicurio.registry.rest.client.impl;
 
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import io.apicurio.registry.rest.Headers;
 import io.apicurio.registry.rest.client.RegistryClient;
 import io.apicurio.registry.rest.client.exception.InvalidArtifactIdException;
@@ -32,14 +46,14 @@ import io.apicurio.registry.rest.v2.beans.ArtifactMetaData;
 import io.apicurio.registry.rest.v2.beans.ArtifactOwner;
 import io.apicurio.registry.rest.v2.beans.ArtifactReference;
 import io.apicurio.registry.rest.v2.beans.ArtifactSearchResults;
+import io.apicurio.registry.rest.v2.beans.Comment;
 import io.apicurio.registry.rest.v2.beans.ConfigurationProperty;
 import io.apicurio.registry.rest.v2.beans.EditableMetaData;
 import io.apicurio.registry.rest.v2.beans.Error;
 import io.apicurio.registry.rest.v2.beans.GroupMetaData;
 import io.apicurio.registry.rest.v2.beans.GroupSearchResults;
 import io.apicurio.registry.rest.v2.beans.IfExists;
-import io.apicurio.registry.rest.v2.beans.LogConfiguration;
-import io.apicurio.registry.rest.v2.beans.NamedLogConfiguration;
+import io.apicurio.registry.rest.v2.beans.NewComment;
 import io.apicurio.registry.rest.v2.beans.RoleMapping;
 import io.apicurio.registry.rest.v2.beans.Rule;
 import io.apicurio.registry.rest.v2.beans.SortBy;
@@ -54,17 +68,6 @@ import io.apicurio.registry.types.RuleType;
 import io.apicurio.registry.utils.ArtifactIdValidator;
 import io.apicurio.registry.utils.IoUtil;
 import io.apicurio.rest.client.spi.ApicurioHttpClient;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.InputStream;
-import java.io.StringBufferInputStream;
-import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 
 /**
@@ -74,6 +77,7 @@ public class RegistryClientImpl implements RegistryClient {
 
     protected final ApicurioHttpClient apicurioHttpClient;
     private static final Logger logger = LoggerFactory.getLogger(RegistryClientImpl.class);
+    private static final ObjectMapper mapper = new ObjectMapper();
 
     public RegistryClientImpl(ApicurioHttpClient apicurioHttpClient) {
         this.apicurioHttpClient = apicurioHttpClient;
@@ -299,30 +303,39 @@ public class RegistryClientImpl implements RegistryClient {
 
     @Override
     public ArtifactMetaData createArtifact(String groupId, String artifactId, String version, String artifactType, IfExists ifExists, Boolean canonical, String artifactName, String artifactDescription, String contentType, String fromURL, String artifactSHA, InputStream data) {
-        var ca = createArtifactLogic(artifactId, version, artifactType, ifExists, canonical, artifactName, artifactDescription, contentType, artifactSHA);
+        try {
+            var ca = createArtifactLogic(artifactId, version, artifactType, ifExists, canonical, artifactName, artifactDescription, contentType, artifactSHA);
 
-        if (fromURL != null) {
-            ca.headers.put(Headers.CONTENT_TYPE, ContentTypes.APPLICATION_CREATE_EXTENDED);
-            data = new StringBufferInputStream("{ \"content\" : \"" + fromURL + "\" }");
+            if (fromURL != null) {
+                ca.headers.put(Headers.CONTENT_TYPE, ContentTypes.APPLICATION_CREATE_EXTENDED);
+                UrlContent uc = new UrlContent();
+                uc.setContent(fromURL);
+                byte[] contentBytes = mapper.writer().writeValueAsBytes(uc);
+                data = new ByteArrayInputStream(contentBytes);
+            }
+
+            return apicurioHttpClient.sendRequest(GroupRequestsProvider.createArtifact(normalizeGid(groupId), ca.headers, data, ca.queryParams));
+        } catch (JsonProcessingException e) {
+            throw new RestClientException(e);
         }
-
-        return apicurioHttpClient.sendRequest(GroupRequestsProvider.createArtifact(normalizeGid(groupId), ca.headers, data, ca.queryParams));
     }
 
     @Override
     public ArtifactMetaData createArtifact(String groupId, String artifactId, String version, String artifactType, IfExists ifExists, Boolean canonical, String artifactName, String artifactDescription, String contentType, String fromURL, String artifactSHA, InputStream data, List<ArtifactReference> artifactReferences) {
         var ca = createArtifactLogic(artifactId, version, artifactType, ifExists, canonical, artifactName, artifactDescription, ContentTypes.APPLICATION_CREATE_EXTENDED, artifactSHA);
 
-        String content = IoUtil.toString(data);
-        if (fromURL != null) {
-            content = " { \"content\" : \"" + fromURL + "\" }";
-        }
-
-        final ArtifactContent artifactContent = new ArtifactContent();
-        artifactContent.setContent(content);
-        artifactContent.setReferences(artifactReferences);
-
         try {
+            String content = IoUtil.toString(data);
+            if (fromURL != null) {
+                UrlContent uc = new UrlContent();
+                uc.setContent(fromURL);
+                content = mapper.writeValueAsString(uc);
+            }
+
+            final ArtifactContent artifactContent = new ArtifactContent();
+            artifactContent.setContent(content);
+            artifactContent.setReferences(artifactReferences);
+
             return apicurioHttpClient.sendRequest(GroupRequestsProvider.createArtifactWithReferences(normalizeGid(groupId), ca.headers, artifactContent, ca.queryParams));
         } catch (JsonProcessingException e) {
             throw parseSerializationError(e);
@@ -467,34 +480,6 @@ public class RegistryClientImpl implements RegistryClient {
 
     @Deprecated
     @Override
-    public List<NamedLogConfiguration> listLogConfigurations() {
-        return apicurioHttpClient.sendRequest(AdminRequestsProvider.listLogConfigurations());
-    }
-
-    @Deprecated
-    @Override
-    public NamedLogConfiguration getLogConfiguration(String logger) {
-        return apicurioHttpClient.sendRequest(AdminRequestsProvider.getLogConfiguration(logger));
-    }
-
-    @Deprecated
-    @Override
-    public NamedLogConfiguration setLogConfiguration(String logger, LogConfiguration data) {
-        try {
-            return apicurioHttpClient.sendRequest(AdminRequestsProvider.setLogConfiguration(logger, data));
-        } catch (JsonProcessingException e) {
-            throw parseSerializationError(e);
-        }
-    }
-
-    @Deprecated
-    @Override
-    public NamedLogConfiguration removeLogConfiguration(String logger) {
-        return apicurioHttpClient.sendRequest(AdminRequestsProvider.removeLogConfiguration(logger));
-    }
-
-    @Deprecated
-    @Override
     public InputStream exportData() {
         return apicurioHttpClient.sendRequest(AdminRequestsProvider.exportData());
     }
@@ -595,6 +580,34 @@ public class RegistryClientImpl implements RegistryClient {
     @Override
     public List<ArtifactReference> getArtifactReferencesByCoordinates(String groupId, String artifactId, String version) {
         return apicurioHttpClient.sendRequest(GroupRequestsProvider.getArtifactReferencesByCoordinates(normalizeGid(groupId), artifactId, version));
+    }
+    
+    @Override
+    public Comment addArtifactVersionComment(String groupId, String artifactId, String version, NewComment comment) {
+        try {
+            return apicurioHttpClient.sendRequest(GroupRequestsProvider.addArtifactVersionComment(normalizeGid(groupId), artifactId, version, comment));
+        } catch (JsonProcessingException e) {
+            throw parseSerializationError(e);
+        }
+    }
+
+    @Override
+    public void deleteArtifactVersionComment(String groupId, String artifactId, String version, String commentId) {
+        apicurioHttpClient.sendRequest(GroupRequestsProvider.deleteArtifactVersionComment(normalizeGid(groupId), artifactId, version, commentId));
+    }
+    
+    @Override
+    public void editArtifactVersionComment(String groupId, String artifactId, String version, String commentId, NewComment comment) {
+        try {
+            apicurioHttpClient.sendRequest(GroupRequestsProvider.editArtifactVersionComment(normalizeGid(groupId), artifactId, version, commentId, comment));
+        } catch (JsonProcessingException e) {
+            throw parseSerializationError(e);
+        }
+    }
+    
+    @Override
+    public List<Comment> getArtifactVersionComments(String groupId, String artifactId, String version) {
+        return apicurioHttpClient.sendRequest(GroupRequestsProvider.getArtifactVersionComments(normalizeGid(groupId), artifactId, version));
     }
 
     @Override

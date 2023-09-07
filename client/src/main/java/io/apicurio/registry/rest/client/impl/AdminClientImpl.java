@@ -83,30 +83,6 @@ public class AdminClientImpl implements AdminClient {
     }
 
     @Override
-    public NamedLogConfiguration setLogConfiguration(String logger, LogConfiguration data) {
-        try {
-            return apicurioHttpClient.sendRequest(AdminRequestsProvider.setLogConfiguration(logger, data));
-        } catch (JsonProcessingException e) {
-            throw parseSerializationError(e);
-        }
-    }
-
-    @Override
-    public NamedLogConfiguration getLogConfiguration(String logger) {
-        return apicurioHttpClient.sendRequest(AdminRequestsProvider.getLogConfiguration(logger));
-    }
-
-    @Override
-    public List<NamedLogConfiguration> listLogConfigurations() {
-        return apicurioHttpClient.sendRequest(AdminRequestsProvider.listLogConfigurations());
-    }
-
-    @Override
-    public NamedLogConfiguration removeLogConfiguration(String logger) {
-        return apicurioHttpClient.sendRequest(AdminRequestsProvider.removeLogConfiguration(logger));
-    }
-
-    @Override
     public void createRoleMapping(RoleMapping data) {
         try {
             apicurioHttpClient.sendRequest(AdminRequestsProvider.createRoleMapping(data));
@@ -151,6 +127,11 @@ public class AdminClientImpl implements AdminClient {
     @Override
     public void importData(InputStream data, boolean preserveGlobalIds, boolean preserveContentIds) {
         apicurioHttpClient.sendRequest(AdminRequestsProvider.importData(data, preserveGlobalIds, preserveContentIds));
+    }
+
+    @Override
+    public List<ArtifactTypeInfo> listArtifactTypes() {
+        return apicurioHttpClient.sendRequest(AdminRequestsProvider.listArtifactTypes());
     }
 
 

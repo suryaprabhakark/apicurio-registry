@@ -16,6 +16,12 @@
 
 package io.apicurio.registry.storage.decorator;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+
 import io.apicurio.common.apps.config.DynamicConfigPropertyDto;
 import io.apicurio.registry.content.ContentHandle;
 import io.apicurio.registry.storage.ArtifactAlreadyExistsException;
@@ -23,7 +29,6 @@ import io.apicurio.registry.storage.ArtifactNotFoundException;
 import io.apicurio.registry.storage.ContentNotFoundException;
 import io.apicurio.registry.storage.GroupAlreadyExistsException;
 import io.apicurio.registry.storage.GroupNotFoundException;
-import io.apicurio.registry.storage.LogConfigurationNotFoundException;
 import io.apicurio.registry.storage.RegistryStorage;
 import io.apicurio.registry.storage.RegistryStorageException;
 import io.apicurio.registry.storage.RuleAlreadyExistsException;
@@ -34,12 +39,12 @@ import io.apicurio.registry.storage.dto.ArtifactOwnerDto;
 import io.apicurio.registry.storage.dto.ArtifactReferenceDto;
 import io.apicurio.registry.storage.dto.ArtifactSearchResultsDto;
 import io.apicurio.registry.storage.dto.ArtifactVersionMetaDataDto;
+import io.apicurio.registry.storage.dto.CommentDto;
 import io.apicurio.registry.storage.dto.ContentWrapperDto;
 import io.apicurio.registry.storage.dto.DownloadContextDto;
 import io.apicurio.registry.storage.dto.EditableArtifactMetaDataDto;
 import io.apicurio.registry.storage.dto.GroupMetaDataDto;
 import io.apicurio.registry.storage.dto.GroupSearchResultsDto;
-import io.apicurio.registry.storage.dto.LogConfigurationDto;
 import io.apicurio.registry.storage.dto.OrderBy;
 import io.apicurio.registry.storage.dto.OrderDirection;
 import io.apicurio.registry.storage.dto.RoleMappingDto;
@@ -51,12 +56,6 @@ import io.apicurio.registry.storage.impexp.EntityInputStream;
 import io.apicurio.registry.types.ArtifactState;
 import io.apicurio.registry.types.RuleType;
 import io.apicurio.registry.utils.impexp.Entity;
-
-import java.time.Instant;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.function.Function;
 
 /**
  * @author Fabian Martinez
@@ -671,51 +670,6 @@ public abstract class RegistryStorageDecorator implements RegistryStorage {
     }
 
     /**
-     * @param logger
-     * @return
-     * @throws RegistryStorageException
-     * @throws LogConfigurationNotFoundException
-     * @see RegistryStorage#getLogConfiguration(java.lang.String)
-     */
-    @Override
-    public LogConfigurationDto getLogConfiguration(String logger)
-        throws RegistryStorageException, LogConfigurationNotFoundException {
-        return delegate.getLogConfiguration(logger);
-    }
-
-    /**
-     * @param logConfiguration
-     * @throws RegistryStorageException
-     * @see RegistryStorage#setLogConfiguration(io.apicurio.registry.storage.dto.LogConfigurationDto)
-     */
-    @Override
-    public void setLogConfiguration(LogConfigurationDto logConfiguration) throws RegistryStorageException {
-        delegate.setLogConfiguration(logConfiguration);
-    }
-
-    /**
-     * @param logger
-     * @throws RegistryStorageException
-     * @throws LogConfigurationNotFoundException
-     * @see RegistryStorage#removeLogConfiguration(java.lang.String)
-     */
-    @Override
-    public void removeLogConfiguration(String logger)
-        throws RegistryStorageException, LogConfigurationNotFoundException {
-        delegate.removeLogConfiguration(logger);
-    }
-
-    /**
-     * @return
-     * @throws RegistryStorageException
-     * @see RegistryStorage#listLogConfigurations()
-     */
-    @Override
-    public List<LogConfigurationDto> listLogConfigurations() throws RegistryStorageException {
-        return delegate.listLogConfigurations();
-    }
-
-    /**
      * @param group
      * @throws GroupAlreadyExistsException
      * @throws RegistryStorageException
@@ -1006,6 +960,14 @@ public abstract class RegistryStorageDecorator implements RegistryStorage {
     public List<Long> getGlobalIdsReferencingArtifact(String groupId, String artifactId, String version) {
         return delegate.getGlobalIdsReferencingArtifact(groupId, artifactId, version);
     }
+    
+    /**
+     * @see io.apicurio.registry.storage.RegistryStorage#getInboundArtifactReferences(java.lang.String, java.lang.String, java.lang.String)
+     */
+    @Override
+    public List<ArtifactReferenceDto> getInboundArtifactReferences(String groupId, String artifactId, String version) {
+        return delegate.getInboundArtifactReferences(groupId, artifactId, version);
+    }
 
     /**
      * @see io.apicurio.registry.storage.RegistryStorage#searchGroups(Set, OrderBy, OrderDirection, Integer, Integer)
@@ -1013,5 +975,37 @@ public abstract class RegistryStorageDecorator implements RegistryStorage {
     @Override
     public GroupSearchResultsDto searchGroups(Set<SearchFilter> filters, OrderBy orderBy, OrderDirection orderDirection, Integer offset, Integer limit) {
         return delegate.searchGroups(filters, orderBy, orderDirection, offset, limit);
+    }
+    
+    /**
+     * @see io.apicurio.registry.storage.RegistryStorage#createArtifactVersionComment(java.lang.String, java.lang.String, java.lang.String, java.lang.String)
+     */
+    @Override
+    public CommentDto createArtifactVersionComment(String groupId, String artifactId, String version, String value) {
+        return delegate.createArtifactVersionComment(groupId, artifactId, version, value);
+    }
+
+    /**
+     * @see io.apicurio.registry.storage.RegistryStorage#deleteArtifactVersionComment(java.lang.String, java.lang.String, java.lang.String, java.lang.String)
+     */
+    @Override
+    public void deleteArtifactVersionComment(String groupId, String artifactId, String version, String commentId) {
+        delegate.deleteArtifactVersionComment(groupId, artifactId, version, commentId);
+    }
+    
+    /**
+     * @see io.apicurio.registry.storage.RegistryStorage#getArtifactVersionComments(java.lang.String, java.lang.String, java.lang.String)
+     */
+    @Override
+    public List<CommentDto> getArtifactVersionComments(String groupId, String artifactId, String version) {
+        return delegate.getArtifactVersionComments(groupId, artifactId, version);
+    }
+    
+    /**
+     * @see io.apicurio.registry.storage.RegistryStorage#updateArtifactVersionComment(java.lang.String, java.lang.String, java.lang.String, java.lang.String, java.lang.String)
+     */
+    @Override
+    public void updateArtifactVersionComment(String groupId, String artifactId, String version, String commentId, String value) {
+        delegate.updateArtifactVersionComment(groupId, artifactId, version, commentId, value);
     }
 }

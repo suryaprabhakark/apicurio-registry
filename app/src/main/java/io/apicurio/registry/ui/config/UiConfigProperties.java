@@ -21,10 +21,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.function.Supplier;
 
-import javax.annotation.PostConstruct;
-import javax.enterprise.context.ApplicationScoped;
-import javax.inject.Inject;
-
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.annotation.PostConstruct;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.slf4j.Logger;
 
@@ -59,7 +58,7 @@ public class UiConfigProperties {
     String uiContextPath;
 
     @Inject
-    @ConfigProperty(name = "registry.ui.config.uiCodegenEnabled", defaultValue = "false")
+    @ConfigProperty(name = "registry.ui.config.uiCodegenEnabled", defaultValue = "true")
     @Info(category = "ui", description = "UI codegen enabled", availableSince = "2.4.2.Final")
     boolean uiCodegenEnabled;
 

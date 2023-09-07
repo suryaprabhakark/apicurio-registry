@@ -22,11 +22,7 @@ import io.apicurio.registry.content.ContentHandle;
 import io.apicurio.registry.rest.client.exception.UnprocessableSchemaException;
 import io.apicurio.registry.rest.v2.beans.ArtifactReference;
 import io.apicurio.registry.rest.v2.beans.Rule;
-import io.apicurio.registry.rules.RuleApplicationType;
-import io.apicurio.registry.rules.RuleContext;
-import io.apicurio.registry.rules.RuleViolation;
-import io.apicurio.registry.rules.RuleViolationException;
-import io.apicurio.registry.rules.RulesService;
+import io.apicurio.registry.rules.*;
 import io.apicurio.registry.rules.compatibility.CompatibilityLevel;
 import io.apicurio.registry.rules.compatibility.CompatibilityRuleExecutor;
 import io.apicurio.registry.rules.compatibility.jsonschema.diff.DiffType;
@@ -36,10 +32,10 @@ import io.apicurio.registry.utils.IoUtil;
 import io.apicurio.registry.utils.tests.TestUtils;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import javax.inject.Inject;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -65,20 +61,6 @@ public class CompatibilityRuleApplicationTest extends AbstractResourceTestBase {
             "            \"type\": \"string\",\r\n" +
             "            \"default\": \"NONE\"\r\n" +
             "        },\r\n" +
-            "        {\r\n" +
-            "            \"name\": \"props\",\r\n" +
-            "            \"type\": {\r\n" +
-            "                \"type\": \"map\",\r\n" +
-            "                \"values\": \"string\"\r\n" +
-            "            }\r\n" +
-            "        }\r\n" +
-            "    ]\r\n" +
-            "}";
-    private static final String SCHEMA_WITH_MAP_FIELD_REMOVED = "{\r\n" +
-            "    \"type\": \"record\",\r\n" +
-            "    \"name\": \"userInfo\",\r\n" +
-            "    \"namespace\": \"my.example\",\r\n" +
-            "    \"fields\": [\r\n" +
             "        {\r\n" +
             "            \"name\": \"props\",\r\n" +
             "            \"type\": {\r\n" +
@@ -154,20 +136,6 @@ public class CompatibilityRuleApplicationTest extends AbstractResourceTestBase {
             "  }\n" +
             "}";
 
-    private static final String citizenIdentifierSchema = "{\n" +
-            "  \"$id\": \"https://example.com/citizenIdentifier.schema.json\",\n" +
-            "  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n" +
-            "  \"title\": \"Identifier\",\n" +
-            "  \"type\": \"object\",\n" +
-            "  \"properties\": {\n" +
-            "    \"identifier\": {\n" +
-            "      \"type\": \"integer\",\n" +
-            "      \"description\": \"The citizen identifier.\",\n" +
-            "      \"minimum\": 0\n" +
-            "    }\n" +
-            "  }\n" +
-            "}";
-
     @Inject
     RulesService rules;
 
@@ -183,7 +151,7 @@ public class CompatibilityRuleApplicationTest extends AbstractResourceTestBase {
         given()
                 .when()
                 .contentType(CT_JSON).body(rule)
-                .post("/registry/v1/rules")
+                .post("/registry/v2/admin/rules")
                 .then()
                 .statusCode(204)
                 .body(anything());
@@ -192,7 +160,7 @@ public class CompatibilityRuleApplicationTest extends AbstractResourceTestBase {
         TestUtils.retry(() -> {
             given()
                     .when()
-                    .get("/registry/v1/rules/COMPATIBILITY")
+                    .get("/registry/v2/admin/rules/COMPATIBILITY")
                     .then()
                     .statusCode(200)
                     .contentType(ContentType.JSON)
@@ -201,7 +169,7 @@ public class CompatibilityRuleApplicationTest extends AbstractResourceTestBase {
         });
 
         rules.applyRules("no-group", "not-existent", ArtifactType.AVRO, ContentHandle.create(SCHEMA_SIMPLE),
-                RuleApplicationType.CREATE, Collections.emptyMap());
+                RuleApplicationType.CREATE, Collections.emptyList(), Collections.emptyMap());
     }
 
     @Test
@@ -210,7 +178,9 @@ public class CompatibilityRuleApplicationTest extends AbstractResourceTestBase {
         String v2Schema = "{\"type\": \"string\"}";
 
         Assertions.assertThrows(RuleViolationException.class, () -> {
-            RuleContext context = new RuleContext("TestGroup", "Test", "AVRO", "BACKWARD", Collections.singletonList(ContentHandle.create(v1Schema)), ContentHandle.create(v2Schema), Collections.emptyMap());
+            RuleContext context = new RuleContext("TestGroup", "Test", "AVRO", "BACKWARD",
+                    Collections.singletonList(ContentHandle.create(v1Schema)), ContentHandle.create(v2Schema),
+                    Collections.emptyList(), Collections.emptyMap());
             compatibility.execute(context);
         });
     }
@@ -221,7 +191,9 @@ public class CompatibilityRuleApplicationTest extends AbstractResourceTestBase {
         String v2Schema = JsonSchemas.incompatibleJsonSchema;
 
         RuleViolationException ruleViolationException = Assertions.assertThrows(RuleViolationException.class, () -> {
-            RuleContext context = new RuleContext("TestGroup", "TestJson", ArtifactType.JSON, "FORWARD_TRANSITIVE", Collections.singletonList(ContentHandle.create(v1Schema)), ContentHandle.create(v2Schema), Collections.emptyMap());
+            RuleContext context = new RuleContext("TestGroup", "TestJson", ArtifactType.JSON, "FORWARD_TRANSITIVE",
+                    Collections.singletonList(ContentHandle.create(v1Schema)), ContentHandle.create(v2Schema),
+                    Collections.emptyList(), Collections.emptyMap());
             compatibility.execute(context);
         });
 
@@ -275,8 +247,7 @@ public class CompatibilityRuleApplicationTest extends AbstractResourceTestBase {
         String groupId = TestUtils.generateGroupId();
         String cityArtifactId = generateArtifactId();
 
-        final Integer cityDependencyGlobalId = createArtifact(groupId, cityArtifactId, ArtifactType.JSON, citySchema);
-        this.waitForGlobalId(cityDependencyGlobalId);
+        /*final Integer cityDependencyGlobalId = */createArtifact(groupId, cityArtifactId, ArtifactType.JSON, citySchema);
 
         final ArtifactReference cityReference = new ArtifactReference();
         cityReference.setVersion("1");
@@ -286,14 +257,12 @@ public class CompatibilityRuleApplicationTest extends AbstractResourceTestBase {
 
         String artifactId = generateArtifactId();
 
-        final Integer globalId = createArtifactWithReferences(groupId, artifactId, ArtifactType.JSON, citizenSchema , List.of(cityReference));
-        this.waitForGlobalId(globalId);
+        /*final Integer globalId = */createArtifactWithReferences(groupId, artifactId, ArtifactType.JSON, citizenSchema , List.of(cityReference));
 
         createArtifactRule(groupId, artifactId, RuleType.COMPATIBILITY, "BACKWARD");
 
         //Try to create the same artifact again, it should be validated with no issues.
         updateArtifactWithReferences(groupId, artifactId, ArtifactType.JSON, citizenSchema, List.of(cityReference));
-        this.waitForGlobalId(globalId);
     }
 
     private RuleViolation findCauseByContext(Set<RuleViolation> ruleViolations, String context) {

@@ -21,9 +21,9 @@ import io.apicurio.registry.ccompat.rest.error.ConflictException;
 import io.apicurio.registry.ccompat.rest.error.UnprocessableEntityException;
 import io.apicurio.registry.metrics.health.liveness.LivenessUtil;
 import io.apicurio.registry.metrics.health.liveness.ResponseErrorLivenessCheck;
-import io.apicurio.registry.mt.TenantForbiddenException;
-import io.apicurio.registry.mt.TenantNotAuthorizedException;
-import io.apicurio.registry.mt.TenantNotFoundException;
+import io.apicurio.common.apps.multitenancy.exceptions.TenantForbiddenException;
+import io.apicurio.common.apps.multitenancy.exceptions.TenantNotAuthorizedException;
+import io.apicurio.common.apps.multitenancy.exceptions.TenantNotFoundException;
 import io.apicurio.registry.mt.limits.LimitExceededException;
 import io.apicurio.registry.rest.MissingRequiredParameterException;
 import io.apicurio.registry.rest.ParametersConflictException;
@@ -70,11 +70,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import javax.enterprise.context.ApplicationScoped;
-import javax.inject.Inject;
-import javax.ws.rs.BadRequestException;
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Response;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.WebApplicationException;
+import jakarta.ws.rs.core.Response;
 
 import static java.net.HttpURLConnection.*;
 
@@ -136,7 +136,7 @@ public class RegistryExceptionMapperService {
         map.put(ParametersConflictException.class, HTTP_CONFLICT);
         map.put(DownloadNotFoundException.class, HTTP_NOT_FOUND);
         map.put(ConfigPropertyNotFoundException.class, HTTP_NOT_FOUND);
-        // From io.apicurio.registry.mt.TenantMetadataService:
+        // From io.apicurio.common.apps.multitenancy.TenantManagerService:
         map.put(NotAuthorizedException.class, HTTP_FORBIDDEN);
         map.put(ForbiddenException.class, HTTP_FORBIDDEN);
         // Not using HTTP_NOT_FOUND to prevent leaking information by scanning for existing tenants

@@ -48,7 +48,7 @@ public class ErrorHandler implements RestClientErrorHandler {
     @Override
     public ApicurioRestClientException handleErrorResponse(InputStream body, int statusCode) {
         try {
-            // NOTE: io.apicurio.registry.mt.TenantNotFoundException is also mapped to HTTP code 403 to avoid scanning attacks
+            // NOTE: io.apicurio.common.apps.multitenancy.TenantNotFoundException is also mapped to HTTP code 403 to avoid scanning attacks
             if (statusCode == UNAUTHORIZED_CODE) {
                 //authorization error
                 return new NotAuthorizedException("Authentication exception");
@@ -82,7 +82,10 @@ public class ErrorHandler implements RestClientErrorHandler {
         error.setName(ex.getClass().getSimpleName());
         error.setDetail(ex.getMessage());
         error.setMessage("Error trying to parse request body");
-        logger.debug("Error trying to parse request body:", ex);
+        if (logger.isDebugEnabled()) {
+            logger.error("Error trying to parse REST Client request body.", ex);
+            logger.warn("REST Client returning error with classname [{}] and message '{}'", error.getName(), error.getDetail());
+        }
         return new RestClientException(new Error());
     }
 
@@ -91,7 +94,10 @@ public class ErrorHandler implements RestClientErrorHandler {
         final Error error = new Error();
         error.setName(ex.getClass().getSimpleName());
         error.setMessage(ex.getMessage());
-        logger.debug("Error returned:", ex);
+        if (logger.isDebugEnabled()) {
+            logger.error("Error returned from registry server.", ex);
+            logger.warn("REST Client returning error with classname [{}] and message '{}'", error.getName(), error.getDetail());
+        }
         return new RestClientException(error);
     }
 
