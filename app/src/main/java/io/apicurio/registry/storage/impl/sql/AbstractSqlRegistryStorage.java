@@ -1241,13 +1241,20 @@ public abstract class AbstractSqlRegistryStorage implements RegistryStorage {
             StringBuilder limitOffset = new StringBuilder();
 
             boolean joinContentTable = hasContentFilter(filters);
+            boolean hasIdFilter = hasFilter(filters, SearchFilterType.globalId);
 
             // Formulate the SELECT clause for the artifacts query
             select.append(
                     "SELECT a.*, v.globalId, v.version, v.state, v.name, v.description, v.labels, v.properties, "
                             + "v.createdBy AS modifiedBy, v.createdOn AS modifiedOn "
-                            + "FROM artifacts a "
-                            + "JOIN versions v ON a.tenantId = v.tenantId AND a.latest = v.globalId ");
+                            + "FROM artifacts a ");
+
+            if (hasIdFilter) {
+                select.append("JOIN versions v ON a.tenantId = v.tenantId AND a.groupid = v.groupid AND a.artifactid = v.artifactid ");
+            } else {
+                select.append("JOIN versions v ON a.tenantId = v.tenantId AND a.latest = v.globalId ");
+            }
+
             if (joinContentTable) {
                 select.append("JOIN content c ON v.contentId = c.contentId AND v.tenantId = c.tenantId ");
             }
@@ -1391,8 +1398,12 @@ public abstract class AbstractSqlRegistryStorage implements RegistryStorage {
             Query artifactsQuery = handle.createQuery(artifactsQuerySql);
             // Query for the total row count
             String countSelect = "SELECT count(a.artifactId) "
-                    + "FROM artifacts a "
-                    + "JOIN versions v ON a.tenantId = v.tenantId AND a.latest = v.globalId ";
+                    + "FROM artifacts a ";
+            if (hasIdFilter) {
+                countSelect += "JOIN versions v ON a.tenantId = v.tenantId AND a.groupid = v.groupid AND a.artifactid = v.artifactid ";
+            } else {
+                countSelect += "JOIN versions v ON a.tenantId = v.tenantId AND a.latest = v.globalId ";
+            }
             if (joinContentTable) {
                 countSelect += "JOIN content c ON v.contentId = c.contentId AND v.tenantId = c.tenantId ";
             }
@@ -3877,6 +3888,10 @@ public abstract class AbstractSqlRegistryStorage implements RegistryStorage {
             }
         }
         return false;
+    }
+
+    private static boolean hasFilter(Set<SearchFilter> filters, SearchFilterType filterType) {
+        return filters.stream().anyMatch(filter -> filter.getType() == filterType);
     }
 
     protected long nextContentId(Handle handle) {
